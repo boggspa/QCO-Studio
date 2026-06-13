@@ -52,6 +52,19 @@ enum class BlendMode {
   Lighten
 };
 
+struct TextLayerPayload {
+  std::string text;
+  std::string color = "#FF181818";
+  int pointSize = 48;
+};
+
+struct ShapeLayerPayload {
+  std::string shape = "rectangle";
+  std::string fillColor = "#782D9CDB";
+  std::string strokeColor = "#FF181818";
+  int strokeWidth = 4;
+};
+
 struct Layer {
   std::uint64_t id = 0;
   std::string name;
@@ -62,6 +75,8 @@ struct Layer {
   BlendMode blendMode = BlendMode::Normal;
   Point position;
   Size size;
+  std::optional<TextLayerPayload> textPayload;
+  std::optional<ShapeLayerPayload> shapePayload;
 };
 
 class Document {

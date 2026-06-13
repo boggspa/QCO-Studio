@@ -427,6 +427,8 @@ void MainWindow::duplicateSelectedLayer()
     newLayer->locked = source.locked;
     newLayer->opacity = source.opacity;
     newLayer->blendMode = source.blendMode;
+    newLayer->textPayload = source.textPayload;
+    newLayer->shapePayload = source.shapePayload;
   }
 
   CanvasView::LayerImage duplicate = sourcePayload;
@@ -1353,6 +1355,13 @@ void MainWindow::addTextLayerAt(QPoint documentPoint)
     qco::core::LayerType::Text,
     toCoreSize(image.size()),
     toCorePoint(documentPoint));
+  if (auto* layerModel = document_->findLayer(layerId)) {
+    qco::core::TextLayerPayload payload;
+    payload.text = text.toStdString();
+    payload.color = textColor_.name(QColor::HexArgb).toStdString();
+    payload.pointSize = textPointSize_;
+    layerModel->textPayload = std::move(payload);
+  }
 
   CanvasView::LayerImage layer;
   layer.id = layerId;
@@ -1399,6 +1408,14 @@ void MainWindow::addShapeLayerAt(QPoint documentPoint)
     qco::core::LayerType::Shape,
     toCoreSize(image.size()),
     toCorePoint(documentPoint));
+  if (auto* layerModel = document_->findLayer(layerId)) {
+    qco::core::ShapeLayerPayload payload;
+    payload.shape = shapeKey.toStdString();
+    payload.fillColor = shapeFillColor_.name(QColor::HexArgb).toStdString();
+    payload.strokeColor = shapeStrokeColor_.name(QColor::HexArgb).toStdString();
+    payload.strokeWidth = shapeStrokeWidth_;
+    layerModel->shapePayload = std::move(payload);
+  }
 
   CanvasView::LayerImage layer;
   layer.id = layerId;

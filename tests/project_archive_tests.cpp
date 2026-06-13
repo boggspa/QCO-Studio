@@ -224,10 +224,21 @@ int main(int argc, char** argv)
   CHECK(textLayer != nullptr);
   textLayer->locked = true;
   textLayer->blendMode = qco::core::BlendMode::Screen;
+  qco::core::TextLayerPayload textPayload;
+  textPayload.text = "Hello QCO";
+  textPayload.color = "#FF102030";
+  textPayload.pointSize = 42;
+  textLayer->textPayload = textPayload;
 
   auto* shapeLayer = document.findLayer(shapeId);
   CHECK(shapeLayer != nullptr);
   shapeLayer->blendMode = qco::core::BlendMode::Multiply;
+  qco::core::ShapeLayerPayload shapePayload;
+  shapePayload.shape = "ellipse";
+  shapePayload.fillColor = "#802D9CDB";
+  shapePayload.strokeColor = "#FF010203";
+  shapePayload.strokeWidth = 5;
+  shapeLayer->shapePayload = shapePayload;
 
   QVector<qco::ui::ProjectRasterLayer> layers;
   layers.push_back({
@@ -277,6 +288,9 @@ int main(int argc, char** argv)
   CHECK(bytes.startsWith(QByteArray::fromHex("504b0304")));
   CHECK(bytes.contains("manifest.json"));
   CHECK(bytes.contains("document.json"));
+  CHECK(bytes.contains("\"payload\""));
+  CHECK(bytes.contains("Hello QCO"));
+  CHECK(bytes.contains("ellipse"));
   CHECK(bytes.contains(QStringLiteral("layers/%1.png").arg(rasterId).toUtf8()));
   CHECK(bytes.contains(QStringLiteral("layers/%1.png").arg(textId).toUtf8()));
   CHECK(bytes.contains(QStringLiteral("layers/%1.png").arg(shapeId).toUtf8()));
@@ -318,6 +332,11 @@ int main(int argc, char** argv)
   CHECK(loadedTextLayer->size.width == 32);
   CHECK(loadedTextLayer->size.height == 12);
   CHECK(std::abs(loadedTextLayer->opacity - 0.65) < 0.001);
+  CHECK(loadedTextLayer->textPayload.has_value());
+  CHECK(loadedTextLayer->textPayload->text == "Hello QCO");
+  CHECK(loadedTextLayer->textPayload->color == "#FF102030");
+  CHECK(loadedTextLayer->textPayload->pointSize == 42);
+  CHECK(!loadedTextLayer->shapePayload.has_value());
 
   const auto* loadedShapeLayer = loaded->document.findLayer(shapeId);
   CHECK(loadedShapeLayer != nullptr);
@@ -329,6 +348,12 @@ int main(int argc, char** argv)
   CHECK(loadedShapeLayer->size.width == 24);
   CHECK(loadedShapeLayer->size.height == 18);
   CHECK(std::abs(loadedShapeLayer->opacity - 0.8) < 0.001);
+  CHECK(loadedShapeLayer->shapePayload.has_value());
+  CHECK(loadedShapeLayer->shapePayload->shape == "ellipse");
+  CHECK(loadedShapeLayer->shapePayload->fillColor == "#802D9CDB");
+  CHECK(loadedShapeLayer->shapePayload->strokeColor == "#FF010203");
+  CHECK(loadedShapeLayer->shapePayload->strokeWidth == 5);
+  CHECK(!loadedShapeLayer->textPayload.has_value());
 
   CHECK(loaded->rasterLayers.size() == 3);
   CHECK(loaded->rasterLayers[0].id == rasterId);

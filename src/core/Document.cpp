@@ -19,6 +19,23 @@ namespace {
   return opacity;
 }
 
+void normalizeLayer(Layer& layer, Size canvasSize)
+{
+  if (layer.name.empty()) {
+    layer.name = "Layer";
+  }
+  if (!layer.size.isValid()) {
+    layer.size = canvasSize;
+  }
+  layer.opacity = clampOpacity(layer.opacity);
+  if (layer.type != LayerType::Text) {
+    layer.textPayload.reset();
+  }
+  if (layer.type != LayerType::Shape) {
+    layer.shapePayload.reset();
+  }
+}
+
 }  // namespace
 
 bool Size::isValid() const noexcept
@@ -80,9 +97,9 @@ std::uint64_t Document::addLayer(
   layer.id = nextLayerId_++;
   layer.name = name.empty() ? "Layer" : std::move(name);
   layer.type = type;
-  layer.opacity = clampOpacity(layer.opacity);
   layer.size = size.isValid() ? size : canvasSize_;
   layer.position = position;
+  normalizeLayer(layer, canvasSize_);
 
   layers_.push_back(std::move(layer));
   return layers_.back().id;
@@ -94,13 +111,7 @@ bool Document::addLayer(Layer layer)
     return false;
   }
 
-  if (layer.name.empty()) {
-    layer.name = "Layer";
-  }
-  if (!layer.size.isValid()) {
-    layer.size = canvasSize_;
-  }
-  layer.opacity = clampOpacity(layer.opacity);
+  normalizeLayer(layer, canvasSize_);
 
   nextLayerId_ = std::max(nextLayerId_, layer.id + 1);
   layers_.push_back(std::move(layer));

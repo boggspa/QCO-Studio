@@ -73,6 +73,68 @@ bool documentPreservesExplicitLayerMetadata()
   return true;
 }
 
+bool documentPreservesTypeSpecificLayerPayloads()
+{
+  auto document = qco::core::Document::create("Test", {320, 240});
+
+  qco::core::Layer textLayer;
+  textLayer.id = 1;
+  textLayer.name = "Headline";
+  textLayer.type = qco::core::LayerType::Text;
+  textLayer.size = {120, 40};
+  qco::core::TextLayerPayload textPayload;
+  textPayload.text = "Hello";
+  textPayload.color = "#FF102030";
+  textPayload.pointSize = 36;
+  textLayer.textPayload = textPayload;
+  CHECK(document.addLayer(textLayer));
+
+  const auto* importedTextLayer = document.findLayer(1);
+  CHECK(importedTextLayer != nullptr);
+  CHECK(importedTextLayer->textPayload.has_value());
+  CHECK(importedTextLayer->textPayload->text == "Hello");
+  CHECK(importedTextLayer->textPayload->color == "#FF102030");
+  CHECK(importedTextLayer->textPayload->pointSize == 36);
+  CHECK(!importedTextLayer->shapePayload.has_value());
+
+  qco::core::Layer shapeLayer;
+  shapeLayer.id = 2;
+  shapeLayer.name = "Badge";
+  shapeLayer.type = qco::core::LayerType::Shape;
+  shapeLayer.size = {120, 40};
+  qco::core::ShapeLayerPayload shapePayload;
+  shapePayload.shape = "ellipse";
+  shapePayload.fillColor = "#802D9CDB";
+  shapePayload.strokeColor = "#FF010203";
+  shapePayload.strokeWidth = 3;
+  shapeLayer.shapePayload = shapePayload;
+  CHECK(document.addLayer(shapeLayer));
+
+  const auto* importedShapeLayer = document.findLayer(2);
+  CHECK(importedShapeLayer != nullptr);
+  CHECK(importedShapeLayer->shapePayload.has_value());
+  CHECK(importedShapeLayer->shapePayload->shape == "ellipse");
+  CHECK(importedShapeLayer->shapePayload->fillColor == "#802D9CDB");
+  CHECK(importedShapeLayer->shapePayload->strokeColor == "#FF010203");
+  CHECK(importedShapeLayer->shapePayload->strokeWidth == 3);
+  CHECK(!importedShapeLayer->textPayload.has_value());
+
+  qco::core::Layer rasterLayer;
+  rasterLayer.id = 3;
+  rasterLayer.name = "Pixels";
+  rasterLayer.type = qco::core::LayerType::Raster;
+  rasterLayer.size = {120, 40};
+  rasterLayer.textPayload = textPayload;
+  rasterLayer.shapePayload = shapePayload;
+  CHECK(document.addLayer(rasterLayer));
+
+  const auto* importedRasterLayer = document.findLayer(3);
+  CHECK(importedRasterLayer != nullptr);
+  CHECK(!importedRasterLayer->textPayload.has_value());
+  CHECK(!importedRasterLayer->shapePayload.has_value());
+  return true;
+}
+
 bool undoStackDropsRedoBranch()
 {
   int value = 0;
@@ -106,7 +168,7 @@ bool undoStackDropsRedoBranch()
 int main()
 {
   if (!documentKeepsLayerOrder() || !documentRejectsInvalidCanvasResize() || !documentPreservesExplicitLayerMetadata()
-      || !undoStackDropsRedoBranch()) {
+      || !documentPreservesTypeSpecificLayerPayloads() || !undoStackDropsRedoBranch()) {
     return 1;
   }
   return 0;

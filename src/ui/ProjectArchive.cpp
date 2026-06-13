@@ -287,6 +287,56 @@ void writeUInt32(QIODevice& device, quint32 value)
   return ok ? id : 0;
 }
 
+void insertTextPayload(QJsonObject& layerJson, const qco::core::TextLayerPayload& payload)
+{
+  QJsonObject payloadJson;
+  payloadJson.insert(QStringLiteral("text"), QString::fromStdString(payload.text));
+  payloadJson.insert(QStringLiteral("color"), QString::fromStdString(payload.color));
+  payloadJson.insert(QStringLiteral("pointSize"), payload.pointSize);
+  layerJson.insert(QStringLiteral("payload"), payloadJson);
+}
+
+void insertShapePayload(QJsonObject& layerJson, const qco::core::ShapeLayerPayload& payload)
+{
+  QJsonObject payloadJson;
+  payloadJson.insert(QStringLiteral("shape"), QString::fromStdString(payload.shape));
+  payloadJson.insert(QStringLiteral("fillColor"), QString::fromStdString(payload.fillColor));
+  payloadJson.insert(QStringLiteral("strokeColor"), QString::fromStdString(payload.strokeColor));
+  payloadJson.insert(QStringLiteral("strokeWidth"), payload.strokeWidth);
+  layerJson.insert(QStringLiteral("payload"), payloadJson);
+}
+
+[[nodiscard]] qco::core::TextLayerPayload textPayloadFromJson(
+  const QJsonObject& payloadJson,
+  const qco::core::Layer& layer)
+{
+  qco::core::TextLayerPayload payload;
+  payload.text = payloadJson.value(QStringLiteral("text"))
+                   .toString(QString::fromStdString(layer.name))
+                   .toStdString();
+  payload.color = payloadJson.value(QStringLiteral("color"))
+                    .toString(QStringLiteral("#FF181818"))
+                    .toStdString();
+  payload.pointSize = std::max(1, payloadJson.value(QStringLiteral("pointSize")).toInt(48));
+  return payload;
+}
+
+[[nodiscard]] qco::core::ShapeLayerPayload shapePayloadFromJson(const QJsonObject& payloadJson)
+{
+  qco::core::ShapeLayerPayload payload;
+  payload.shape = payloadJson.value(QStringLiteral("shape"))
+                    .toString(QStringLiteral("rectangle"))
+                    .toStdString();
+  payload.fillColor = payloadJson.value(QStringLiteral("fillColor"))
+                        .toString(QStringLiteral("#782D9CDB"))
+                        .toStdString();
+  payload.strokeColor = payloadJson.value(QStringLiteral("strokeColor"))
+                          .toString(QStringLiteral("#FF181818"))
+                          .toStdString();
+  payload.strokeWidth = std::max(0, payloadJson.value(QStringLiteral("strokeWidth")).toInt(4));
+  return payload;
+}
+
 }  // namespace
 
 bool ProjectArchive::save(
@@ -323,6 +373,11 @@ bool ProjectArchive::save(
     layerJson.insert(QStringLiteral("y"), layer.position.y);
     layerJson.insert(QStringLiteral("width"), layer.size.width);
     layerJson.insert(QStringLiteral("height"), layer.size.height);
+    if (layer.type == qco::core::LayerType::Text && layer.textPayload.has_value()) {
+      insertTextPayload(layerJson, *layer.textPayload);
+    } else if (layer.type == qco::core::LayerType::Shape && layer.shapePayload.has_value()) {
+      insertShapePayload(layerJson, *layer.shapePayload);
+    }
 
     const auto layerImage = std::find_if(
       rasterLayers.begin(),
@@ -436,6 +491,15 @@ std::optional<ProjectDocument> ProjectArchive::load(const QString& filePath, QSt
       layerJson.value(QStringLiteral("width")).toInt(document.canvasSize().width),
       layerJson.value(QStringLiteral("height")).toInt(document.canvasSize().height),
     };
+    const auto payloadValue = layerJson.value(QStringLiteral("payload"));
+    if (payloadValue.isObject()) {
+      const auto payloadJson = payloadValue.toObject();
+      if (layer.type == qco::core::LayerType::Text) {
+        layer.textPayload = textPayloadFromJson(payloadJson, layer);
+      } else if (layer.type == qco::core::LayerType::Shape) {
+        layer.shapePayload = shapePayloadFromJson(payloadJson);
+      }
+    }
 
     if (layer.id == 0 || !document.addLayer(layer)) {
       if (errorMessage) {
