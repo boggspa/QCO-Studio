@@ -1,12 +1,15 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace qco::core {
+
+using MetadataMap = std::map<std::string, std::string>;
 
 struct Size {
   int width = 0;
@@ -88,6 +91,11 @@ public:
   [[nodiscard]] const std::string& title() const noexcept;
   void setTitle(std::string title);
 
+  [[nodiscard]] const MetadataMap& metadata() const noexcept;
+  void setMetadata(std::string key, std::string value);
+  [[nodiscard]] bool removeMetadata(std::string_view key);
+  void clearMetadata();
+
   [[nodiscard]] Size canvasSize() const noexcept;
   void resizeCanvas(Size canvasSize);
 
@@ -116,6 +124,7 @@ public:
 
 private:
   std::string title_;
+  MetadataMap metadata_;
   Size canvasSize_;
   std::uint64_t nextLayerId_ = 1;
   std::vector<Layer> layers_;

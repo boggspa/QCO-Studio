@@ -9,7 +9,7 @@ This repository is currently Phase 1. The app skeleton includes:
 - Pan and zoom canvas view with checkerboard transparency.
 - PNG/JPEG export through Qt image IO, with TIFF/WebP enabled when Qt Image Formats plugins are installed.
 - Native `.qco` project package skeleton saved as a ZIP-compatible archive.
-- Native `.qco` project reopen for raster-backed layer packages with text/shape intent metadata.
+- Native `.qco` project reopen for raster-backed layer packages with text/shape intent metadata and document metadata.
 - Basic raster layer add, duplicate, rename, reorder, visibility, opacity, and canvas move controls.
 - Initial editing tools: configurable brush, eraser, flood fill, drag crop, crop-to-layer, raster-backed text layer, and raster-backed shape layer.
 - Core document/layer model and command undo stack.

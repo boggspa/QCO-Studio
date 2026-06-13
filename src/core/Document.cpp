@@ -70,6 +70,32 @@ void Document::setTitle(std::string title)
   }
 }
 
+const MetadataMap& Document::metadata() const noexcept
+{
+  return metadata_;
+}
+
+void Document::setMetadata(std::string key, std::string value)
+{
+  if (key.empty()) {
+    return;
+  }
+  metadata_[std::move(key)] = std::move(value);
+}
+
+bool Document::removeMetadata(std::string_view key)
+{
+  if (key.empty()) {
+    return false;
+  }
+  return metadata_.erase(std::string(key)) > 0;
+}
+
+void Document::clearMetadata()
+{
+  metadata_.clear();
+}
+
 Size Document::canvasSize() const noexcept
 {
   return canvasSize_;

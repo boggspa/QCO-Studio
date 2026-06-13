@@ -202,6 +202,15 @@ void writeUInt32(QIODevice& device, quint32 value)
   return QJsonDocument(object).toJson(QJsonDocument::Indented);
 }
 
+[[nodiscard]] QJsonObject metadataToJson(const qco::core::MetadataMap& metadata)
+{
+  QJsonObject metadataJson;
+  for (const auto& [key, value] : metadata) {
+    metadataJson.insert(QString::fromStdString(key), QString::fromStdString(value));
+  }
+  return metadataJson;
+}
+
 [[nodiscard]] std::optional<QVector<ZipEntry>> readStoredZip(const QString& filePath, QString* errorMessage)
 {
   QFile file(filePath);
@@ -337,6 +346,25 @@ void insertShapePayload(QJsonObject& layerJson, const qco::core::ShapeLayerPaylo
   return payload;
 }
 
+[[nodiscard]] bool applyMetadataObject(
+  qco::core::Document& document,
+  const QJsonObject& metadataJson,
+  QString* errorMessage)
+{
+  for (auto it = metadataJson.constBegin(); it != metadataJson.constEnd(); ++it) {
+    if (it.key().isEmpty() || !it.value().isString()) {
+      if (errorMessage) {
+        *errorMessage = QStringLiteral("The project document metadata is invalid.");
+      }
+      return false;
+    }
+
+    document.setMetadata(it.key().toStdString(), it.value().toString().toStdString());
+  }
+
+  return true;
+}
+
 }  // namespace
 
 bool ProjectArchive::save(
@@ -358,6 +386,12 @@ bool ProjectArchive::save(
   documentJson.insert(QStringLiteral("title"), QString::fromStdString(document.title()));
   documentJson.insert(QStringLiteral("width"), document.canvasSize().width);
   documentJson.insert(QStringLiteral("height"), document.canvasSize().height);
+
+  if (!document.metadata().empty()) {
+    const auto metadataPath = QStringLiteral("metadata/document.json");
+    documentJson.insert(QStringLiteral("metadata"), metadataPath);
+    entries.push_back({metadataPath, toJson(metadataToJson(document.metadata()))});
+  }
 
   QJsonArray layersJson;
   for (const auto& layer : document.layers()) {
@@ -463,6 +497,39 @@ std::optional<ProjectDocument> ProjectArchive::load(const QString& filePath, QSt
       root.value(QStringLiteral("width")).toInt(1),
       root.value(QStringLiteral("height")).toInt(1),
     });
+
+  const auto metadataValue = root.value(QStringLiteral("metadata"));
+  if (metadataValue.isObject()) {
+    if (!applyMetadataObject(document, metadataValue.toObject(), errorMessage)) {
+      return std::nullopt;
+    }
+  } else if (metadataValue.isString()) {
+    const auto metadataPath = metadataValue.toString();
+    const auto metadataBytes = entryData(*entries, metadataPath);
+    if (!metadataBytes.has_value()) {
+      if (errorMessage) {
+        *errorMessage = QStringLiteral("The project package is missing document metadata.");
+      }
+      return std::nullopt;
+    }
+
+    const auto metadataDocument = QJsonDocument::fromJson(*metadataBytes);
+    if (!metadataDocument.isObject()) {
+      if (errorMessage) {
+        *errorMessage = QStringLiteral("The project document metadata is invalid.");
+      }
+      return std::nullopt;
+    }
+
+    if (!applyMetadataObject(document, metadataDocument.object(), errorMessage)) {
+      return std::nullopt;
+    }
+  } else if (!metadataValue.isUndefined()) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("The project document metadata is invalid.");
+    }
+    return std::nullopt;
+  }
 
   QVector<ProjectRasterLayer> rasterLayers;
   const auto layersJson = root.value(QStringLiteral("layers")).toArray();

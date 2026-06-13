@@ -78,6 +78,29 @@ bool documentPreservesExplicitLayerMetadata()
   return true;
 }
 
+bool documentPreservesDocumentMetadata()
+{
+  auto document = qco::core::Document::create("Test", {320, 240});
+
+  document.setMetadata("camera.make", "QCO Test Camera");
+  document.setMetadata("rating", "5");
+  document.setMetadata("", "ignored");
+
+  CHECK(document.metadata().size() == 2);
+  CHECK(document.metadata().at("camera.make") == "QCO Test Camera");
+  CHECK(document.metadata().at("rating") == "5");
+
+  document.setMetadata("rating", "4");
+  CHECK(document.metadata().at("rating") == "4");
+  CHECK(document.removeMetadata("rating"));
+  CHECK(!document.removeMetadata("rating"));
+  CHECK(document.metadata().size() == 1);
+
+  document.clearMetadata();
+  CHECK(document.metadata().empty());
+  return true;
+}
+
 bool documentPreservesTypeSpecificLayerPayloads()
 {
   auto document = qco::core::Document::create("Test", {320, 240});
@@ -173,7 +196,8 @@ bool undoStackDropsRedoBranch()
 int main()
 {
   if (!documentKeepsLayerOrder() || !documentRejectsInvalidCanvasResize() || !documentPreservesExplicitLayerMetadata()
-      || !documentPreservesTypeSpecificLayerPayloads() || !undoStackDropsRedoBranch()) {
+      || !documentPreservesDocumentMetadata() || !documentPreservesTypeSpecificLayerPayloads()
+      || !undoStackDropsRedoBranch()) {
     return 1;
   }
   return 0;

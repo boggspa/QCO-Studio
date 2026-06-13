@@ -65,6 +65,8 @@ history/
 
 The format must preserve layer structure, masks, editable text, vectors, adjustments, embedded assets, color profiles, metadata, autosave/recovery data, and migration metadata. Phase 1 writes a stored-ZIP skeleton with `manifest.json`, `document.json`, and raster layer PNG payloads. It is not yet the final archival implementation.
 
+Native document metadata now lives on the core `Document` as first-party key/value strings and is written into `.qco` packages as `metadata/document.json`. This keeps project metadata round-tripping without linking a GPL-risk metadata library and leaves EXIF/IPTC/XMP ingestion to a later reviewed adapter.
+
 ## 7. Canvas And Rendering Architecture
 
 The long-term canvas is an infinite pasteboard around fixed document bounds. Rendering should run through a tile renderer, dirty rectangle scheduler, layer compositor, mask/vector/text renderers, and GPU abstraction. Phase 1 uses a Qt `QWidget` canvas with checkerboard, document bounds, pan/zoom, and raster layer drawing so UI workflows can progress before Skia lands.
