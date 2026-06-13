@@ -89,6 +89,8 @@ private:
   void updateActions();
   void updateWindowTitle();
   void setDirty(bool dirty);
+  void markCurrentUndoStateClean();
+  void updateDirtyFromUndoStack();
   void setSelectedLayerId(std::uint64_t id);
   void syncCanvasLayers();
   void applyStrokeToSelectedLayer(CanvasView::Tool tool, QPoint fromDocumentPoint, QPoint toDocumentPoint);
@@ -160,6 +162,7 @@ private:
   std::unique_ptr<qco::core::Document> document_;
   QVector<CanvasView::LayerImage> layers_;
   qco::core::UndoStack undoStack_;
+  std::optional<std::size_t> cleanUndoIndex_;
   std::uint64_t selectedLayerId_ = 0;
   std::optional<DocumentState> pendingMoveBeforeState_;
   std::optional<DocumentState> pendingRasterEditBeforeState_;

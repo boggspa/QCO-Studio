@@ -185,7 +185,7 @@ void MainWindow::newDocument()
   setDocument(std::move(document), std::move(layers));
   currentProjectPath_.clear();
   undoStack_.clear();
-  setDirty(false);
+  markCurrentUndoStateClean();
   updateHistoryPanel();
   statusBar()->showMessage(tr("Created new document"), 3000);
 }
@@ -236,6 +236,7 @@ void MainWindow::openImage()
   setDocument(std::move(document), std::move(layers));
   currentProjectPath_.clear();
   undoStack_.clear();
+  cleanUndoIndex_.reset();
   setDirty(true);
   updateHistoryPanel();
   statusBar()->showMessage(tr("Opened %1").arg(info.fileName()), 3000);
@@ -280,7 +281,7 @@ void MainWindow::openProject()
   setDocument(std::move(loadedProject->document), std::move(canvasLayers));
   currentProjectPath_ = path;
   undoStack_.clear();
-  setDirty(false);
+  markCurrentUndoStateClean();
   rememberDirectory(path);
   updateHistoryPanel();
   statusBar()->showMessage(tr("Opened project"), 3000);
@@ -328,8 +329,7 @@ bool MainWindow::saveProjectToPath(QString path)
 
   currentProjectPath_ = path;
   rememberDirectory(path);
-  setDirty(false);
-  updateWindowTitle();
+  markCurrentUndoStateClean();
   statusBar()->showMessage(tr("Saved project"), 3000);
   return true;
 }
@@ -740,6 +740,7 @@ void MainWindow::setCanvasToActualSize()
 void MainWindow::undo()
 {
   if (undoStack_.undo()) {
+    updateDirtyFromUndoStack();
     updateHistoryPanel();
     updateActions();
   }
@@ -748,6 +749,7 @@ void MainWindow::undo()
 void MainWindow::redo()
 {
   if (undoStack_.redo()) {
+    updateDirtyFromUndoStack();
     updateHistoryPanel();
     updateActions();
   }
@@ -1046,6 +1048,8 @@ void MainWindow::createInitialDocument()
     "Untitled",
     {defaultDocumentWidth, defaultDocumentHeight});
   setDocument(std::move(document), {});
+  undoStack_.clear();
+  markCurrentUndoStateClean();
 }
 
 void MainWindow::setDocument(qco::core::Document document, QVector<CanvasView::LayerImage> layers)
@@ -1082,18 +1086,24 @@ void MainWindow::applyState(const DocumentState& state)
 
 void MainWindow::pushStateCommand(QString label, DocumentState before, DocumentState after)
 {
+  if (undoStack_.index() < undoStack_.size()
+      && cleanUndoIndex_.has_value()
+      && *cleanUndoIndex_ > undoStack_.index()) {
+    cleanUndoIndex_.reset();
+  }
+
   undoStack_.push(std::make_unique<qco::core::LambdaCommand>(
     label.toStdString(),
     [this, before = std::move(before)]() {
       applyState(before);
-      setDirty(true);
+      updateDirtyFromUndoStack();
     },
     [this, after = std::move(after)]() {
       applyState(after);
-      setDirty(true);
+      updateDirtyFromUndoStack();
     }));
 
-  setDirty(true);
+  updateDirtyFromUndoStack();
   updateHistoryPanel();
   updateActions();
 }
@@ -1214,6 +1224,17 @@ void MainWindow::setDirty(bool dirty)
   dirty_ = dirty;
   updatePropertiesPanel();
   updateWindowTitle();
+}
+
+void MainWindow::markCurrentUndoStateClean()
+{
+  cleanUndoIndex_ = undoStack_.index();
+  setDirty(false);
+}
+
+void MainWindow::updateDirtyFromUndoStack()
+{
+  setDirty(!cleanUndoIndex_.has_value() || undoStack_.index() != *cleanUndoIndex_);
 }
 
 void MainWindow::setSelectedLayerId(std::uint64_t id)
