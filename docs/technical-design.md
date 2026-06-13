@@ -20,7 +20,7 @@ src/app        Application bootstrap, settings, logging
 src/ui         Qt windows, panels, canvas widget, project archive adapter
 src/core       Document, layer, tool contracts, undo stack
 src/render     Future Skia renderer and compositor
-src/image      Future OpenImageIO, color, metadata, RAW pipeline
+src/image      Image codec boundary now; future OpenImageIO, color, metadata, RAW pipeline
 src/vector     Future path, shape, SVG, glyph outline model
 src/tools      Future tool implementations
 src/plugins    Future internal plugin SDK and host
@@ -72,6 +72,8 @@ The long-term canvas is an infinite pasteboard around fixed document bounds. Ren
 The first rendering boundary is active in `src/render`: document export now calls a `DocumentRenderer` interface with a Qt-backed implementation. The core `Document` remains authoritative for layer order, visibility, opacity, and position, while layer image payloads provide the current pixel previews. This keeps the future Skia backend replaceable without changing export callers.
 
 The Qt renderer now composes through tile requests, and `TileScheduler` maps document dirty rectangles to tile rectangles. Export still asks for a full image, but the render boundary can now be driven by tile-sized invalidation work for a future interactive canvas/cache.
+
+Image import now goes through `src/image/ImageCodec` with a Qt-backed codec. OpenImageIO should replace or augment that codec boundary rather than being called directly from UI code.
 
 ## 8. Layer Model Architecture
 
