@@ -71,6 +71,8 @@ The long-term canvas is an infinite pasteboard around fixed document bounds. Ren
 
 The first rendering boundary is active in `src/render`: document export now calls a `DocumentRenderer` interface with a Qt-backed implementation. The core `Document` remains authoritative for layer order, visibility, opacity, and position, while layer image payloads provide the current pixel previews. This keeps the future Skia backend replaceable without changing export callers.
 
+The Qt renderer now composes through tile requests, and `TileScheduler` maps document dirty rectangles to tile rectangles. Export still asks for a full image, but the render boundary can now be driven by tile-sized invalidation work for a future interactive canvas/cache.
+
 ## 8. Layer Model Architecture
 
 Layers have stable ids, names, type, visibility, lock state, opacity, blend mode, bounds, and type-specific payload references. The core model owns ordering and metadata; renderer/image modules own pixel payloads. Groups and masks should be explicit graph relationships rather than hidden UI-only nesting.

@@ -39,6 +39,8 @@ if(QCO_STUDIO_BUILD_APP)
   add_library(qcostudio_qt_support
     src/render/DocumentRenderer.cpp
     src/render/DocumentRenderer.h
+    src/render/TileScheduler.cpp
+    src/render/TileScheduler.h
     src/ui/ImageExport.cpp
     src/ui/ImageExport.h
     src/ui/ProjectArchive.cpp

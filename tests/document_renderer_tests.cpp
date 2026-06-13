@@ -1,5 +1,6 @@
 #include "core/Document.h"
 #include "render/DocumentRenderer.h"
+#include "render/TileScheduler.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -56,13 +57,53 @@ int main(int argc, char** argv)
   layerImages.push_back({9999, solidImage(QSize(8, 6), QColor(255, 0, 255, 255))});
 
   const qco::render::QtDocumentRenderer renderer;
-  const QImage rendered = renderer.render(document, layerImages);
+  const QImage rendered = renderer.render(
+    document,
+    layerImages,
+    Qt::transparent,
+    qco::render::RenderSettings{QSize(3, 2)});
 
   CHECK(!rendered.isNull());
   CHECK(rendered.size() == QSize(8, 6));
   CHECK(rendered.pixelColor(0, 0) == QColor(255, 0, 0, 255));
   CHECK(rendered.pixelColor(2, 1) == QColor(0, 0, 255, 255));
+  CHECK(rendered.pixelColor(3, 2) == QColor(0, 0, 255, 255));
   CHECK(rendered.pixelColor(4, 2) == QColor(255, 0, 0, 255));
+
+  const QImage tile = renderer.renderTile(document, layerImages, QRect(2, 1, 3, 2));
+  CHECK(!tile.isNull());
+  CHECK(tile.size() == QSize(3, 2));
+  CHECK(tile.pixelColor(0, 0) == QColor(0, 0, 255, 255));
+  CHECK(tile.pixelColor(1, 1) == QColor(0, 0, 255, 255));
+  CHECK(tile.pixelColor(2, 1) == QColor(255, 0, 0, 255));
+
+  const auto canvasTiles = qco::render::tileRectsForCanvas(QSize(5, 4), QSize(3, 2));
+  CHECK(canvasTiles.size() == 4);
+  CHECK(canvasTiles[0] == QRect(0, 0, 3, 2));
+  CHECK(canvasTiles[1] == QRect(3, 0, 2, 2));
+  CHECK(canvasTiles[2] == QRect(0, 2, 3, 2));
+  CHECK(canvasTiles[3] == QRect(3, 2, 2, 2));
+
+  const auto dirtyTiles = qco::render::tileRectsForDirtyRect(QSize(10, 8), QSize(4, 3), QRect(3, 2, 5, 3));
+  CHECK(dirtyTiles.size() == 4);
+  CHECK(dirtyTiles[0] == QRect(0, 0, 4, 3));
+  CHECK(dirtyTiles[1] == QRect(4, 0, 4, 3));
+  CHECK(dirtyTiles[2] == QRect(0, 3, 4, 3));
+  CHECK(dirtyTiles[3] == QRect(4, 3, 4, 3));
+
+  qco::render::DirtyTileScheduler scheduler(QSize(10, 8), QSize(4, 3));
+  CHECK(!scheduler.hasDirtyTiles());
+  scheduler.invalidate(QRect(4, 3, 1, 1));
+  scheduler.invalidate(QRect(5, 4, 1, 1));
+  CHECK(scheduler.hasDirtyTiles());
+  auto scheduledTiles = scheduler.takeDirtyTiles();
+  CHECK(scheduledTiles.size() == 1);
+  CHECK(scheduledTiles[0] == QRect(4, 3, 4, 3));
+  CHECK(!scheduler.hasDirtyTiles());
+
+  scheduler.invalidateAll();
+  scheduledTiles = scheduler.takeDirtyTiles();
+  CHECK(scheduledTiles == qco::render::tileRectsForCanvas(QSize(10, 8), QSize(4, 3)));
 
   return 0;
 }
