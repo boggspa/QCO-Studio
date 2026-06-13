@@ -83,9 +83,14 @@ public:
     LayerType type,
     Size size,
     Point position = {});
+  [[nodiscard]] bool addLayer(Layer layer);
 
   [[nodiscard]] bool removeLayer(std::uint64_t id);
   [[nodiscard]] bool moveLayer(std::uint64_t id, std::size_t newIndex);
+  [[nodiscard]] bool setLayerName(std::uint64_t id, std::string name);
+  [[nodiscard]] bool setLayerVisibility(std::uint64_t id, bool visible);
+  [[nodiscard]] bool setLayerOpacity(std::uint64_t id, double opacity);
+  [[nodiscard]] bool setLayerPosition(std::uint64_t id, Point position);
 
   [[nodiscard]] Layer* findLayer(std::uint64_t id) noexcept;
   [[nodiscard]] const Layer* findLayer(std::uint64_t id) const noexcept;
@@ -102,5 +107,7 @@ private:
 
 [[nodiscard]] std::string_view toString(LayerType type) noexcept;
 [[nodiscard]] std::string_view toString(BlendMode mode) noexcept;
+[[nodiscard]] LayerType layerTypeFromString(std::string_view value) noexcept;
+[[nodiscard]] BlendMode blendModeFromString(std::string_view value) noexcept;
 
 }  // namespace qco::core

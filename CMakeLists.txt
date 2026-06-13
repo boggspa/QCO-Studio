@@ -111,6 +111,26 @@ if(QCO_STUDIO_BUILD_APP)
     )
 
     add_test(NAME qcostudio_project_archive_tests COMMAND qcostudio_project_archive_tests)
+
+    qt_add_executable(qcostudio_canvas_smoke_tests
+      tests/canvas_smoke_tests.cpp
+      src/ui/CanvasView.cpp
+      src/ui/CanvasView.h
+    )
+
+    target_include_directories(qcostudio_canvas_smoke_tests
+      PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    target_link_libraries(qcostudio_canvas_smoke_tests
+      PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+    )
+
+    add_test(NAME qcostudio_canvas_smoke_tests COMMAND qcostudio_canvas_smoke_tests)
   endif()
 endif()
 

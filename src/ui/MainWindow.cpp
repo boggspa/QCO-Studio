@@ -4,7 +4,9 @@
 #include "ui/ProjectArchive.h"
 
 #include <QAction>
+#include <QAbstractItemView>
 #include <QApplication>
+#include <QCloseEvent>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -12,18 +14,26 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QHBoxLayout>
 #include <QImageReader>
+#include <QInputDialog>
 #include <QKeySequence>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
+#include <QListWidgetItem>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPushButton>
+#include <QSignalBlocker>
+#include <QSlider>
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QStringList>
 #include <QStyle>
 #include <QToolBar>
+#include <QVariant>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -46,9 +56,24 @@ constexpr int defaultDocumentHeight = 1080;
   return QObject::tr("Images (%1);;All files (*)").arg(patterns.join(QLatin1Char(' ')));
 }
 
+[[nodiscard]] QString projectFileFilter()
+{
+  return QObject::tr("QCO Studio Document (*.qco)");
+}
+
 [[nodiscard]] qco::core::Size toCoreSize(QSize size)
 {
   return {size.width(), size.height()};
+}
+
+[[nodiscard]] QSize toQtSize(qco::core::Size size)
+{
+  return QSize(size.width, size.height);
+}
+
+[[nodiscard]] qco::core::Point toCorePoint(QPoint point)
+{
+  return {point.x(), point.y()};
 }
 
 }  // namespace
@@ -70,6 +95,10 @@ MainWindow::MainWindow(QWidget* parent)
   statusBar()->showMessage(tr("Ready"));
 
   connect(canvas_, &CanvasView::zoomChanged, this, &MainWindow::updateZoomLabel);
+  connect(canvas_, &CanvasView::layerSelected, this, &MainWindow::selectCanvasLayer);
+  connect(canvas_, &CanvasView::layerMoveStarted, this, &MainWindow::beginCanvasLayerMove);
+  connect(canvas_, &CanvasView::layerMovePreview, this, &MainWindow::previewCanvasLayerMove);
+  connect(canvas_, &CanvasView::layerMoveCommitted, this, &MainWindow::commitCanvasLayerMove);
 
   restoreGeometry(settings_.value(QStringLiteral("window/geometry")).toByteArray());
   restoreState(settings_.value(QStringLiteral("window/state")).toByteArray());
@@ -83,8 +112,22 @@ MainWindow::~MainWindow()
   settings_.setValue(QStringLiteral("window/state"), saveState());
 }
 
+void MainWindow::closeEvent(QCloseEvent* event)
+{
+  if (maybeSaveChanges()) {
+    event->accept();
+    return;
+  }
+
+  event->ignore();
+}
+
 void MainWindow::newDocument()
 {
+  if (!maybeSaveChanges()) {
+    return;
+  }
+
   QDialog dialog(this);
   dialog.setWindowTitle(tr("New Document"));
 
@@ -122,12 +165,17 @@ void MainWindow::newDocument()
   setDocument(std::move(document), std::move(layers));
   currentProjectPath_.clear();
   undoStack_.clear();
+  setDirty(false);
   updateHistoryPanel();
   statusBar()->showMessage(tr("Created new document"), 3000);
 }
 
 void MainWindow::openImage()
 {
+  if (!maybeSaveChanges()) {
+    return;
+  }
+
   const auto path = QFileDialog::getOpenFileName(
     this,
     tr("Open Image"),
@@ -168,8 +216,54 @@ void MainWindow::openImage()
   setDocument(std::move(document), std::move(layers));
   currentProjectPath_.clear();
   undoStack_.clear();
+  setDirty(true);
   updateHistoryPanel();
   statusBar()->showMessage(tr("Opened %1").arg(info.fileName()), 3000);
+}
+
+void MainWindow::openProject()
+{
+  if (!maybeSaveChanges()) {
+    return;
+  }
+
+  const auto path = QFileDialog::getOpenFileName(
+    this,
+    tr("Open Project"),
+    lastDirectory(),
+    projectFileFilter());
+
+  if (path.isEmpty()) {
+    return;
+  }
+
+  QString error;
+  auto loadedProject = ProjectArchive::load(path, &error);
+  if (!loadedProject.has_value()) {
+    QMessageBox::critical(this, tr("Open Project"), tr("The project could not be opened:\n%1").arg(error));
+    return;
+  }
+
+  QVector<CanvasView::LayerImage> canvasLayers;
+  canvasLayers.reserve(loadedProject->rasterLayers.size());
+  for (const auto& rasterLayer : loadedProject->rasterLayers) {
+    CanvasView::LayerImage layer;
+    layer.id = rasterLayer.id;
+    layer.name = rasterLayer.name;
+    layer.image = rasterLayer.image;
+    layer.position = rasterLayer.position;
+    layer.visible = rasterLayer.visible;
+    layer.opacity = rasterLayer.opacity;
+    canvasLayers.push_back(std::move(layer));
+  }
+
+  setDocument(std::move(loadedProject->document), std::move(canvasLayers));
+  currentProjectPath_ = path;
+  undoStack_.clear();
+  setDirty(false);
+  rememberDirectory(path);
+  updateHistoryPanel();
+  statusBar()->showMessage(tr("Opened project"), 3000);
 }
 
 void MainWindow::saveProject()
@@ -184,11 +278,24 @@ void MainWindow::saveProject()
       this,
       tr("Save Project"),
       lastDirectory() + QLatin1Char('/') + documentTitle() + QStringLiteral(".qco"),
-      tr("QCO Studio Document (*.qco)"));
+      projectFileFilter());
   }
 
   if (path.isEmpty()) {
     return;
+  }
+
+  (void)saveProjectToPath(path);
+}
+
+bool MainWindow::saveProjectToPath(QString path)
+{
+  if (!document_) {
+    return false;
+  }
+
+  if (path.isEmpty()) {
+    return false;
   }
 
   path = withDefaultSuffix(path, QStringLiteral("qco"));
@@ -196,13 +303,15 @@ void MainWindow::saveProject()
   QString error;
   if (!ProjectArchive::save(path, *document_, rasterLayerPayloads(), &error)) {
     QMessageBox::critical(this, tr("Save Project"), tr("The project could not be saved:\n%1").arg(error));
-    return;
+    return false;
   }
 
   currentProjectPath_ = path;
   rememberDirectory(path);
+  setDirty(false);
   updateWindowTitle();
   statusBar()->showMessage(tr("Saved project"), 3000);
+  return true;
 }
 
 void MainWindow::exportImage()
@@ -229,7 +338,7 @@ void MainWindow::exportImage()
 
   path = withDefaultSuffix(path, wantsJpeg ? QStringLiteral("jpg") : QStringLiteral("png"));
 
-  QImage output = canvas_->renderComposite(Qt::transparent);
+  QImage output = renderDocumentComposite(Qt::transparent);
   if (wantsJpeg) {
     QImage flattened(output.size(), QImage::Format_RGB32);
     flattened.fill(Qt::white);
@@ -246,6 +355,254 @@ void MainWindow::exportImage()
 
   rememberDirectory(path);
   statusBar()->showMessage(tr("Exported image"), 3000);
+}
+
+void MainWindow::addRasterLayer()
+{
+  if (!document_) {
+    return;
+  }
+
+  auto before = captureState();
+  const auto canvasSize = document_->canvasSize();
+  const auto name = tr("Raster Layer %1").arg(document_->layers().size() + 1);
+  const auto layerId = document_->addLayer(
+    name.toStdString(),
+    qco::core::LayerType::Raster,
+    canvasSize);
+
+  CanvasView::LayerImage layer;
+  layer.id = layerId;
+  layer.name = name;
+  layer.image = QImage(toQtSize(canvasSize), QImage::Format_ARGB32_Premultiplied);
+  layer.image.fill(Qt::transparent);
+  layer.position = QPoint(0, 0);
+  layers_.push_back(std::move(layer));
+  selectedLayerId_ = layerId;
+
+  pushStateCommand(tr("Add Raster Layer"), std::move(before), captureState());
+}
+
+void MainWindow::duplicateSelectedLayer()
+{
+  const auto* sourceLayer = selectedLayer();
+  const auto* sourceImage = selectedLayerImage();
+  if (!document_ || sourceLayer == nullptr || sourceImage == nullptr) {
+    return;
+  }
+
+  auto before = captureState();
+  const auto source = *sourceLayer;
+  const auto sourcePayload = *sourceImage;
+  const auto name = tr("%1 Copy").arg(QString::fromStdString(source.name));
+  const auto newLayerId = document_->addLayer(
+    name.toStdString(),
+    source.type,
+    source.size,
+    {source.position.x + 16, source.position.y + 16});
+
+  auto* newLayer = document_->findLayer(newLayerId);
+  if (newLayer != nullptr) {
+    newLayer->visible = source.visible;
+    newLayer->locked = source.locked;
+    newLayer->opacity = source.opacity;
+    newLayer->blendMode = source.blendMode;
+  }
+
+  CanvasView::LayerImage duplicate = sourcePayload;
+  duplicate.id = newLayerId;
+  duplicate.name = name;
+  duplicate.position += QPoint(16, 16);
+  layers_.push_back(std::move(duplicate));
+  selectedLayerId_ = newLayerId;
+
+  pushStateCommand(tr("Duplicate Layer"), std::move(before), captureState());
+}
+
+void MainWindow::renameSelectedLayer()
+{
+  const auto* layer = selectedLayer();
+  if (!document_ || layer == nullptr) {
+    return;
+  }
+
+  bool ok = false;
+  const auto currentName = QString::fromStdString(layer->name);
+  const auto newName = QInputDialog::getText(
+    this,
+    tr("Rename Layer"),
+    tr("Name"),
+    QLineEdit::Normal,
+    currentName,
+    &ok);
+
+  if (!ok || newName.trimmed().isEmpty() || newName == currentName) {
+    return;
+  }
+
+  auto before = captureState();
+  if (!document_->setLayerName(selectedLayerId_, newName.toStdString())) {
+    return;
+  }
+  if (auto* image = selectedLayerImage()) {
+    image->name = newName;
+  }
+
+  pushStateCommand(tr("Rename Layer"), std::move(before), captureState());
+}
+
+void MainWindow::moveSelectedLayerUp()
+{
+  if (!document_ || selectedLayerId_ == 0) {
+    return;
+  }
+
+  const auto currentIndex = document_->layerIndex(selectedLayerId_);
+  if (!currentIndex.has_value() || *currentIndex + 1 >= document_->layers().size()) {
+    return;
+  }
+
+  auto before = captureState();
+  const auto newIndex = *currentIndex + 1;
+  if (!document_->moveLayer(selectedLayerId_, newIndex)) {
+    return;
+  }
+  layers_.move(static_cast<qsizetype>(*currentIndex), static_cast<qsizetype>(newIndex));
+
+  pushStateCommand(tr("Move Layer Up"), std::move(before), captureState());
+}
+
+void MainWindow::moveSelectedLayerDown()
+{
+  if (!document_ || selectedLayerId_ == 0) {
+    return;
+  }
+
+  const auto currentIndex = document_->layerIndex(selectedLayerId_);
+  if (!currentIndex.has_value() || *currentIndex == 0) {
+    return;
+  }
+
+  auto before = captureState();
+  const auto newIndex = *currentIndex - 1;
+  if (!document_->moveLayer(selectedLayerId_, newIndex)) {
+    return;
+  }
+  layers_.move(static_cast<qsizetype>(*currentIndex), static_cast<qsizetype>(newIndex));
+
+  pushStateCommand(tr("Move Layer Down"), std::move(before), captureState());
+}
+
+void MainWindow::layerSelectionChanged(QListWidgetItem* current, QListWidgetItem* previous)
+{
+  Q_UNUSED(previous);
+  if (refreshingLayerPanel_) {
+    return;
+  }
+
+  const auto id = current == nullptr ? 0 : current->data(Qt::UserRole).toULongLong();
+  setSelectedLayerId(id);
+}
+
+void MainWindow::layerItemChanged(QListWidgetItem* item)
+{
+  if (refreshingLayerPanel_ || item == nullptr || !document_) {
+    return;
+  }
+
+  const auto id = item->data(Qt::UserRole).toULongLong();
+  auto* layer = document_->findLayer(id);
+  if (layer == nullptr) {
+    return;
+  }
+
+  const auto visible = item->checkState() == Qt::Checked;
+  if (layer->visible == visible) {
+    return;
+  }
+
+  auto before = captureState();
+  if (!document_->setLayerVisibility(id, visible)) {
+    return;
+  }
+  const auto imageIt = std::find_if(layers_.begin(), layers_.end(), [id](const CanvasView::LayerImage& imageLayer) {
+    return imageLayer.id == id;
+  });
+  if (imageIt != layers_.end()) {
+    imageIt->visible = visible;
+  }
+
+  pushStateCommand(visible ? tr("Show Layer") : tr("Hide Layer"), std::move(before), captureState());
+}
+
+void MainWindow::selectedLayerOpacityChanged(int value)
+{
+  if (refreshingLayerPanel_ || selectedLayerId_ == 0 || !document_) {
+    return;
+  }
+
+  const auto opacity = std::clamp(value / 100.0, 0.0, 1.0);
+  const auto* layer = selectedLayer();
+  if (layer == nullptr || qFuzzyCompare(layer->opacity, opacity)) {
+    return;
+  }
+
+  auto before = captureState();
+  if (!document_->setLayerOpacity(selectedLayerId_, opacity)) {
+    return;
+  }
+  if (auto* image = selectedLayerImage()) {
+    image->opacity = opacity;
+  }
+
+  pushStateCommand(tr("Change Layer Opacity"), std::move(before), captureState());
+}
+
+void MainWindow::selectCanvasLayer(std::uint64_t id)
+{
+  setSelectedLayerId(id);
+}
+
+void MainWindow::beginCanvasLayerMove(std::uint64_t id)
+{
+  if (id == 0) {
+    pendingMoveBeforeState_.reset();
+    return;
+  }
+
+  setSelectedLayerId(id);
+  pendingMoveBeforeState_ = captureState();
+}
+
+void MainWindow::previewCanvasLayerMove(std::uint64_t id, QPoint position)
+{
+  if (!document_ || id == 0) {
+    return;
+  }
+
+  if (!document_->setLayerPosition(id, toCorePoint(position))) {
+    return;
+  }
+  const auto imageIt = std::find_if(layers_.begin(), layers_.end(), [id](const CanvasView::LayerImage& imageLayer) {
+    return imageLayer.id == id;
+  });
+  if (imageIt != layers_.end()) {
+    imageIt->position = position;
+  }
+  syncCanvasLayers();
+  updatePropertiesPanel();
+}
+
+void MainWindow::commitCanvasLayerMove(std::uint64_t id, QPoint oldPosition, QPoint newPosition)
+{
+  if (!pendingMoveBeforeState_.has_value() || id == 0 || oldPosition == newPosition) {
+    pendingMoveBeforeState_.reset();
+    return;
+  }
+
+  auto before = std::move(*pendingMoveBeforeState_);
+  pendingMoveBeforeState_.reset();
+  pushStateCommand(tr("Move Layer"), std::move(before), captureState());
 }
 
 void MainWindow::fitCanvasToView()
@@ -287,9 +644,13 @@ void MainWindow::createActions()
   newAction_->setShortcut(QKeySequence::New);
   connect(newAction_, &QAction::triggered, this, &MainWindow::newDocument);
 
-  openAction_ = new QAction(style->standardIcon(QStyle::SP_DirOpenIcon), tr("Open Image"), this);
-  openAction_->setShortcut(QKeySequence::Open);
-  connect(openAction_, &QAction::triggered, this, &MainWindow::openImage);
+  openProjectAction_ = new QAction(style->standardIcon(QStyle::SP_DirOpenIcon), tr("Open Project"), this);
+  openProjectAction_->setShortcut(QKeySequence::Open);
+  connect(openProjectAction_, &QAction::triggered, this, &MainWindow::openProject);
+
+  openImageAction_ = new QAction(style->standardIcon(QStyle::SP_DirOpenIcon), tr("Open Image"), this);
+  openImageAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
+  connect(openImageAction_, &QAction::triggered, this, &MainWindow::openImage);
 
   saveAction_ = new QAction(style->standardIcon(QStyle::SP_DialogSaveButton), tr("Save Project"), this);
   saveAction_->setShortcut(QKeySequence::Save);
@@ -298,6 +659,25 @@ void MainWindow::createActions()
   exportAction_ = new QAction(tr("Export Image"), this);
   exportAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E));
   connect(exportAction_, &QAction::triggered, this, &MainWindow::exportImage);
+
+  addRasterLayerAction_ = new QAction(tr("Add Raster Layer"), this);
+  addRasterLayerAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N));
+  connect(addRasterLayerAction_, &QAction::triggered, this, &MainWindow::addRasterLayer);
+
+  duplicateLayerAction_ = new QAction(tr("Duplicate Layer"), this);
+  duplicateLayerAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_J));
+  connect(duplicateLayerAction_, &QAction::triggered, this, &MainWindow::duplicateSelectedLayer);
+
+  renameLayerAction_ = new QAction(tr("Rename Layer"), this);
+  connect(renameLayerAction_, &QAction::triggered, this, &MainWindow::renameSelectedLayer);
+
+  layerUpAction_ = new QAction(tr("Move Layer Up"), this);
+  layerUpAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
+  connect(layerUpAction_, &QAction::triggered, this, &MainWindow::moveSelectedLayerUp);
+
+  layerDownAction_ = new QAction(tr("Move Layer Down"), this);
+  layerDownAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
+  connect(layerDownAction_, &QAction::triggered, this, &MainWindow::moveSelectedLayerDown);
 
   fitAction_ = new QAction(tr("Fit to View"), this);
   fitAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
@@ -320,7 +700,8 @@ void MainWindow::createMenus()
 {
   auto* fileMenu = menuBar()->addMenu(tr("File"));
   fileMenu->addAction(newAction_);
-  fileMenu->addAction(openAction_);
+  fileMenu->addAction(openProjectAction_);
+  fileMenu->addAction(openImageAction_);
   fileMenu->addSeparator();
   fileMenu->addAction(saveAction_);
   fileMenu->addAction(exportAction_);
@@ -330,6 +711,14 @@ void MainWindow::createMenus()
   auto* editMenu = menuBar()->addMenu(tr("Edit"));
   editMenu->addAction(undoAction_);
   editMenu->addAction(redoAction_);
+
+  auto* layerMenu = menuBar()->addMenu(tr("Layer"));
+  layerMenu->addAction(addRasterLayerAction_);
+  layerMenu->addAction(duplicateLayerAction_);
+  layerMenu->addAction(renameLayerAction_);
+  layerMenu->addSeparator();
+  layerMenu->addAction(layerUpAction_);
+  layerMenu->addAction(layerDownAction_);
 
   auto* viewMenu = menuBar()->addMenu(tr("View"));
   viewMenu->addAction(fitAction_);
@@ -373,9 +762,47 @@ void MainWindow::createPanels()
 {
   auto* layersDock = new QDockWidget(tr("Layers"), this);
   layersDock->setObjectName(QStringLiteral("layersDock"));
-  layersList_ = new QListWidget(layersDock);
-  layersDock->setWidget(layersList_);
+  auto* layersPanel = new QWidget(layersDock);
+  auto* layersLayout = new QVBoxLayout(layersPanel);
+  layersLayout->setContentsMargins(8, 8, 8, 8);
+  layersLayout->setSpacing(6);
+
+  layersList_ = new QListWidget(layersPanel);
+  layersList_->setSelectionMode(QAbstractItemView::SingleSelection);
+  layersLayout->addWidget(layersList_, 1);
+
+  auto* buttonRow = new QHBoxLayout();
+  addLayerButton_ = new QPushButton(tr("Add"), layersPanel);
+  duplicateLayerButton_ = new QPushButton(tr("Duplicate"), layersPanel);
+  renameLayerButton_ = new QPushButton(tr("Rename"), layersPanel);
+  layerUpButton_ = new QPushButton(tr("Up"), layersPanel);
+  layerDownButton_ = new QPushButton(tr("Down"), layersPanel);
+  buttonRow->addWidget(addLayerButton_);
+  buttonRow->addWidget(duplicateLayerButton_);
+  buttonRow->addWidget(renameLayerButton_);
+  buttonRow->addWidget(layerUpButton_);
+  buttonRow->addWidget(layerDownButton_);
+  layersLayout->addLayout(buttonRow);
+
+  auto* opacityRow = new QHBoxLayout();
+  opacityRow->addWidget(new QLabel(tr("Opacity"), layersPanel));
+  opacitySlider_ = new QSlider(Qt::Horizontal, layersPanel);
+  opacitySlider_->setRange(0, 100);
+  opacitySlider_->setValue(100);
+  opacityRow->addWidget(opacitySlider_, 1);
+  layersLayout->addLayout(opacityRow);
+
+  layersDock->setWidget(layersPanel);
   addDockWidget(Qt::RightDockWidgetArea, layersDock);
+
+  connect(layersList_, &QListWidget::currentItemChanged, this, &MainWindow::layerSelectionChanged);
+  connect(layersList_, &QListWidget::itemChanged, this, &MainWindow::layerItemChanged);
+  connect(addLayerButton_, &QPushButton::clicked, this, &MainWindow::addRasterLayer);
+  connect(duplicateLayerButton_, &QPushButton::clicked, this, &MainWindow::duplicateSelectedLayer);
+  connect(renameLayerButton_, &QPushButton::clicked, this, &MainWindow::renameSelectedLayer);
+  connect(layerUpButton_, &QPushButton::clicked, this, &MainWindow::moveSelectedLayerUp);
+  connect(layerDownButton_, &QPushButton::clicked, this, &MainWindow::moveSelectedLayerDown);
+  connect(opacitySlider_, &QSlider::valueChanged, this, &MainWindow::selectedLayerOpacityChanged);
 
   auto* propertiesDock = new QDockWidget(tr("Properties"), this);
   propertiesDock->setObjectName(QStringLiteral("propertiesDock"));
@@ -406,9 +833,11 @@ void MainWindow::setDocument(qco::core::Document document, QVector<CanvasView::L
 {
   document_ = std::make_unique<qco::core::Document>(std::move(document));
   layers_ = std::move(layers);
+  selectedLayerId_ = document_->layers().empty() ? 0 : document_->layers().back().id;
+  pendingMoveBeforeState_.reset();
 
   canvas_->setDocumentSize(QSize(document_->canvasSize().width, document_->canvasSize().height));
-  canvas_->setLayers(layers_);
+  syncCanvasLayers();
 
   updateLayerPanel();
   updatePropertiesPanel();
@@ -417,24 +846,76 @@ void MainWindow::setDocument(qco::core::Document document, QVector<CanvasView::L
   updateWindowTitle();
 }
 
+void MainWindow::applyState(const DocumentState& state)
+{
+  document_ = std::make_unique<qco::core::Document>(state.document);
+  layers_ = state.layers;
+  selectedLayerId_ = state.selectedLayerId;
+
+  canvas_->setDocumentSize(toQtSize(document_->canvasSize()));
+  syncCanvasLayers();
+  updateLayerPanel();
+  updatePropertiesPanel();
+  updateHistoryPanel();
+  updateActions();
+  updateWindowTitle();
+}
+
+void MainWindow::pushStateCommand(QString label, DocumentState before, DocumentState after)
+{
+  undoStack_.push(std::make_unique<qco::core::LambdaCommand>(
+    label.toStdString(),
+    [this, before = std::move(before)]() {
+      applyState(before);
+      setDirty(true);
+    },
+    [this, after = std::move(after)]() {
+      applyState(after);
+      setDirty(true);
+    }));
+
+  setDirty(true);
+  updateHistoryPanel();
+  updateActions();
+}
+
 void MainWindow::updateLayerPanel()
 {
+  refreshingLayerPanel_ = true;
   layersList_->clear();
 
   if (!document_) {
+    refreshingLayerPanel_ = false;
     return;
   }
 
   for (auto it = document_->layers().rbegin(); it != document_->layers().rend(); ++it) {
-    layersList_->addItem(QStringLiteral("%1  [%2]")
-                           .arg(QString::fromStdString(it->name))
-                           .arg(QString::fromUtf8(qco::core::toString(it->type).data(),
-                                                  static_cast<qsizetype>(qco::core::toString(it->type).size()))));
+    auto* item = new QListWidgetItem(
+      QStringLiteral("%1  [%2]")
+        .arg(QString::fromStdString(it->name))
+        .arg(QString::fromUtf8(qco::core::toString(it->type).data(),
+                               static_cast<qsizetype>(qco::core::toString(it->type).size()))));
+    item->setData(Qt::UserRole, QVariant::fromValue<qulonglong>(it->id));
+    item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+    item->setCheckState(it->visible ? Qt::Checked : Qt::Unchecked);
+    layersList_->addItem(item);
+    if (it->id == selectedLayerId_) {
+      layersList_->setCurrentItem(item);
+    }
   }
 
   if (layersList_->count() == 0) {
     layersList_->addItem(tr("No layers yet"));
   }
+
+  if (opacitySlider_ != nullptr) {
+    const QSignalBlocker blocker(opacitySlider_);
+    const auto* layer = selectedLayer();
+    opacitySlider_->setEnabled(layer != nullptr);
+    opacitySlider_->setValue(layer == nullptr ? 100 : qRound(layer->opacity * 100.0));
+  }
+
+  refreshingLayerPanel_ = false;
 }
 
 void MainWindow::updatePropertiesPanel()
@@ -444,11 +925,22 @@ void MainWindow::updatePropertiesPanel()
     return;
   }
 
-  propertiesLabel_->setText(tr("Document\n%1\n\nCanvas\n%2 x %3 px\n\nLayers\n%4\n\nLog\n%5")
+  const auto* layer = selectedLayer();
+  const auto selectedText = layer == nullptr
+                              ? tr("None")
+                              : tr("%1\n%2% opacity\nPosition %3, %4")
+                                  .arg(QString::fromStdString(layer->name))
+                                  .arg(qRound(layer->opacity * 100.0))
+                                  .arg(layer->position.x)
+                                  .arg(layer->position.y);
+
+  propertiesLabel_->setText(tr("Document\n%1%2\n\nCanvas\n%3 x %4 px\n\nLayers\n%5\n\nSelected Layer\n%6\n\nLog\n%7")
                               .arg(documentTitle())
+                              .arg(dirty_ ? tr(" *") : QString())
                               .arg(document_->canvasSize().width)
                               .arg(document_->canvasSize().height)
                               .arg(document_->layers().size())
+                              .arg(selectedText)
                               .arg(qco::app::logFilePath()));
 }
 
@@ -468,22 +960,128 @@ void MainWindow::updateHistoryPanel()
 void MainWindow::updateActions()
 {
   const auto hasDocument = document_ != nullptr;
+  const auto hasSelectedLayer = selectedLayerId_ != 0 && selectedLayer() != nullptr;
+  const auto selectedIndex = document_ == nullptr ? std::optional<std::size_t>() : document_->layerIndex(selectedLayerId_);
   saveAction_->setEnabled(hasDocument);
   exportAction_->setEnabled(hasDocument);
+  addRasterLayerAction_->setEnabled(hasDocument);
+  duplicateLayerAction_->setEnabled(hasSelectedLayer);
+  renameLayerAction_->setEnabled(hasSelectedLayer);
+  layerUpAction_->setEnabled(hasSelectedLayer && selectedIndex.has_value() && *selectedIndex + 1 < document_->layers().size());
+  layerDownAction_->setEnabled(hasSelectedLayer && selectedIndex.has_value() && *selectedIndex > 0);
   fitAction_->setEnabled(hasDocument);
   actualSizeAction_->setEnabled(hasDocument);
   undoAction_->setEnabled(undoStack_.canUndo());
   redoAction_->setEnabled(undoStack_.canRedo());
+
+  if (duplicateLayerButton_ != nullptr) {
+    duplicateLayerButton_->setEnabled(hasSelectedLayer);
+    renameLayerButton_->setEnabled(hasSelectedLayer);
+    layerUpButton_->setEnabled(layerUpAction_->isEnabled());
+    layerDownButton_->setEnabled(layerDownAction_->isEnabled());
+  }
 }
 
 void MainWindow::updateWindowTitle()
 {
-  setWindowTitle(tr("%1 - QCO Studio").arg(documentTitle()));
+  setWindowTitle(tr("%1%2 - QCO Studio").arg(documentTitle()).arg(dirty_ ? QStringLiteral("*") : QString()));
+}
+
+void MainWindow::setDirty(bool dirty)
+{
+  dirty_ = dirty;
+  updatePropertiesPanel();
+  updateWindowTitle();
+}
+
+void MainWindow::setSelectedLayerId(std::uint64_t id)
+{
+  if (id != 0 && (document_ == nullptr || document_->findLayer(id) == nullptr)) {
+    id = 0;
+  }
+
+  selectedLayerId_ = id;
+  canvas_->setSelectedLayerId(id);
+  updateLayerPanel();
+  updatePropertiesPanel();
+  updateActions();
+}
+
+void MainWindow::syncCanvasLayers()
+{
+  canvas_->setSelectedLayerId(selectedLayerId_);
+  canvas_->setLayers(layers_);
 }
 
 void MainWindow::rememberDirectory(const QString& filePath)
 {
   settings_.setValue(QStringLiteral("files/lastDirectory"), QFileInfo(filePath).absolutePath());
+}
+
+bool MainWindow::maybeSaveChanges()
+{
+  if (!dirty_) {
+    return true;
+  }
+
+  const auto result = QMessageBox::warning(
+    this,
+    tr("Unsaved Changes"),
+    tr("Save changes to %1 before continuing?").arg(documentTitle()),
+    QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+    QMessageBox::Save);
+
+  if (result == QMessageBox::Cancel) {
+    return false;
+  }
+  if (result == QMessageBox::Discard) {
+    return true;
+  }
+
+  if (currentProjectPath_.isEmpty()) {
+    const auto path = QFileDialog::getSaveFileName(
+      this,
+      tr("Save Project"),
+      lastDirectory() + QLatin1Char('/') + documentTitle() + QStringLiteral(".qco"),
+      projectFileFilter());
+    if (path.isEmpty()) {
+      return false;
+    }
+    return saveProjectToPath(path);
+  }
+
+  return saveProjectToPath(currentProjectPath_);
+}
+
+MainWindow::DocumentState MainWindow::captureState() const
+{
+  return {*document_, layers_, selectedLayerId_};
+}
+
+qco::core::Layer* MainWindow::selectedLayer() noexcept
+{
+  return document_ == nullptr ? nullptr : document_->findLayer(selectedLayerId_);
+}
+
+const qco::core::Layer* MainWindow::selectedLayer() const noexcept
+{
+  return document_ == nullptr ? nullptr : document_->findLayer(selectedLayerId_);
+}
+
+CanvasView::LayerImage* MainWindow::selectedLayerImage() noexcept
+{
+  const auto it = std::find_if(layers_.begin(), layers_.end(), [id = selectedLayerId_](const CanvasView::LayerImage& layer) {
+    return layer.id == id;
+  });
+  return it == layers_.end() ? nullptr : &(*it);
+}
+
+const CanvasView::LayerImage* MainWindow::selectedLayerImage() const noexcept
+{
+  const auto it = std::find_if(layers_.begin(), layers_.end(), [id = selectedLayerId_](const CanvasView::LayerImage& layer) {
+    return layer.id == id;
+  });
+  return it == layers_.end() ? nullptr : &(*it);
 }
 
 QString MainWindow::lastDirectory() const
@@ -508,6 +1106,28 @@ QString MainWindow::withDefaultSuffix(QString filePath, const QString& suffix) c
   return filePath;
 }
 
+QImage MainWindow::renderDocumentComposite(const QColor& background) const
+{
+  if (!document_) {
+    return {};
+  }
+
+  QImage output(toQtSize(document_->canvasSize()), QImage::Format_ARGB32_Premultiplied);
+  output.fill(background);
+
+  QPainter painter(&output);
+  painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+  for (const auto& layer : layers_) {
+    if (!layer.visible || layer.image.isNull()) {
+      continue;
+    }
+    painter.setOpacity(std::clamp(layer.opacity, 0.0, 1.0));
+    painter.drawImage(layer.position, layer.image);
+  }
+  painter.end();
+  return output;
+}
+
 QVector<ProjectRasterLayer> MainWindow::rasterLayerPayloads() const
 {
   QVector<ProjectRasterLayer> payloads;
@@ -518,6 +1138,9 @@ QVector<ProjectRasterLayer> MainWindow::rasterLayerPayloads() const
     payload.id = layer.id;
     payload.name = layer.name;
     payload.image = layer.image;
+    payload.position = layer.position;
+    payload.visible = layer.visible;
+    payload.opacity = layer.opacity;
     payloads.push_back(std::move(payload));
   }
 

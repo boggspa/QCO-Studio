@@ -60,6 +60,21 @@ const QVector<CanvasView::LayerImage>& CanvasView::layers() const noexcept
   return layers_;
 }
 
+void CanvasView::setSelectedLayerId(std::uint64_t id)
+{
+  if (selectedLayerId_ == id) {
+    return;
+  }
+
+  selectedLayerId_ = id;
+  update();
+}
+
+std::uint64_t CanvasView::selectedLayerId() const noexcept
+{
+  return selectedLayerId_;
+}
+
 void CanvasView::setZoom(qreal zoom)
 {
   const auto nextZoom = clampedZoom(zoom);
@@ -145,6 +160,15 @@ void CanvasView::paintEvent(QPaintEvent* event)
     painter.setOpacity(std::clamp(layer.opacity, 0.0, 1.0));
     painter.drawImage(layer.position, layer.image);
     painter.restore();
+
+    if (layer.id == selectedLayerId_) {
+      QPen selectionPen(QColor(45, 156, 219));
+      selectionPen.setCosmetic(true);
+      selectionPen.setWidth(2);
+      painter.setPen(selectionPen);
+      painter.setBrush(Qt::NoBrush);
+      painter.drawRect(QRectF(layer.position, QSizeF(layer.image.size())));
+    }
   }
 
   QPen borderPen(QColor(98, 105, 116));
@@ -186,11 +210,49 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
     return;
   }
 
+  if (event->button() == Qt::LeftButton) {
+    const auto documentPoint = widgetToDocument(event->position());
+    const auto id = layerAt(documentPoint);
+    setSelectedLayerId(id);
+    emit layerSelected(id);
+
+    if (id != 0) {
+      const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const LayerImage& layer) {
+        return layer.id == id;
+      });
+      if (it != layers_.end()) {
+        movingLayer_ = true;
+        moveStartPosition_ = it->position;
+        moveLastPosition_ = it->position;
+        moveOffset_ = documentPoint - QPointF(it->position);
+        setCursor(Qt::SizeAllCursor);
+        emit layerMoveStarted(id);
+        event->accept();
+        return;
+      }
+    }
+  }
+
   QWidget::mousePressEvent(event);
 }
 
 void CanvasView::mouseMoveEvent(QMouseEvent* event)
 {
+  if (movingLayer_ && selectedLayerId_ != 0) {
+    const auto documentPoint = widgetToDocument(event->position());
+    const QPoint nextPosition(
+      qRound(documentPoint.x() - moveOffset_.x()),
+      qRound(documentPoint.y() - moveOffset_.y()));
+
+    if (nextPosition != moveLastPosition_) {
+      moveLastPosition_ = nextPosition;
+      emit layerMovePreview(selectedLayerId_, nextPosition);
+    }
+
+    event->accept();
+    return;
+  }
+
   if (panning_) {
     pan_ += event->pos() - lastMousePosition_;
     lastMousePosition_ = event->pos();
@@ -204,6 +266,14 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
 
 void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 {
+  if (movingLayer_ && event->button() == Qt::LeftButton) {
+    movingLayer_ = false;
+    unsetCursor();
+    emit layerMoveCommitted(selectedLayerId_, moveStartPosition_, moveLastPosition_);
+    event->accept();
+    return;
+  }
+
   if (panning_ && (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton)) {
     panning_ = false;
     unsetCursor();
@@ -232,6 +302,22 @@ QPointF CanvasView::widgetToDocument(QPointF point) const
 {
   return (point - QPointF(width() / 2.0 + pan_.x(), height() / 2.0 + pan_.y())) / zoom_
          + QPointF(documentSize_.width() / 2.0, documentSize_.height() / 2.0);
+}
+
+std::uint64_t CanvasView::layerAt(QPointF documentPoint) const
+{
+  for (auto it = layers_.rbegin(); it != layers_.rend(); ++it) {
+    if (!it->visible || it->image.isNull()) {
+      continue;
+    }
+
+    const QRectF bounds(QPointF(it->position), QSizeF(it->image.size()));
+    if (bounds.contains(documentPoint)) {
+      return it->id;
+    }
+  }
+
+  return 0;
 }
 
 void CanvasView::drawCheckerboard(QPainter& painter, const QRectF& rect) const

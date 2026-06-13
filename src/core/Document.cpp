@@ -88,6 +88,25 @@ std::uint64_t Document::addLayer(
   return layers_.back().id;
 }
 
+bool Document::addLayer(Layer layer)
+{
+  if (layer.id == 0 || findLayer(layer.id) != nullptr) {
+    return false;
+  }
+
+  if (layer.name.empty()) {
+    layer.name = "Layer";
+  }
+  if (!layer.size.isValid()) {
+    layer.size = canvasSize_;
+  }
+  layer.opacity = clampOpacity(layer.opacity);
+
+  nextLayerId_ = std::max(nextLayerId_, layer.id + 1);
+  layers_.push_back(std::move(layer));
+  return true;
+}
+
 bool Document::removeLayer(std::uint64_t id)
 {
   const auto before = layers_.size();
@@ -113,6 +132,50 @@ bool Document::moveLayer(std::uint64_t id, std::size_t newIndex)
   Layer layer = std::move(layers_[*currentIndex]);
   layers_.erase(layers_.begin() + static_cast<std::ptrdiff_t>(*currentIndex));
   layers_.insert(layers_.begin() + static_cast<std::ptrdiff_t>(newIndex), std::move(layer));
+  return true;
+}
+
+bool Document::setLayerName(std::uint64_t id, std::string name)
+{
+  auto* layer = findLayer(id);
+  if (layer == nullptr) {
+    return false;
+  }
+
+  layer->name = name.empty() ? "Layer" : std::move(name);
+  return true;
+}
+
+bool Document::setLayerVisibility(std::uint64_t id, bool visible)
+{
+  auto* layer = findLayer(id);
+  if (layer == nullptr) {
+    return false;
+  }
+
+  layer->visible = visible;
+  return true;
+}
+
+bool Document::setLayerOpacity(std::uint64_t id, double opacity)
+{
+  auto* layer = findLayer(id);
+  if (layer == nullptr) {
+    return false;
+  }
+
+  layer->opacity = clampOpacity(opacity);
+  return true;
+}
+
+bool Document::setLayerPosition(std::uint64_t id, Point position)
+{
+  auto* layer = findLayer(id);
+  if (layer == nullptr) {
+    return false;
+  }
+
+  layer->position = position;
   return true;
 }
 
@@ -212,6 +275,88 @@ std::string_view toString(BlendMode mode) noexcept
       return "lighten";
   }
   return "unknown";
+}
+
+LayerType layerTypeFromString(std::string_view value) noexcept
+{
+  if (value == "vector") {
+    return LayerType::Vector;
+  }
+  if (value == "text") {
+    return LayerType::Text;
+  }
+  if (value == "shape") {
+    return LayerType::Shape;
+  }
+  if (value == "group") {
+    return LayerType::Group;
+  }
+  if (value == "adjustment") {
+    return LayerType::Adjustment;
+  }
+  if (value == "asset") {
+    return LayerType::Asset;
+  }
+  if (value == "mask") {
+    return LayerType::Mask;
+  }
+  return LayerType::Raster;
+}
+
+BlendMode blendModeFromString(std::string_view value) noexcept
+{
+  if (value == "multiply") {
+    return BlendMode::Multiply;
+  }
+  if (value == "screen") {
+    return BlendMode::Screen;
+  }
+  if (value == "overlay") {
+    return BlendMode::Overlay;
+  }
+  if (value == "soft-light") {
+    return BlendMode::SoftLight;
+  }
+  if (value == "hard-light") {
+    return BlendMode::HardLight;
+  }
+  if (value == "color-dodge") {
+    return BlendMode::ColorDodge;
+  }
+  if (value == "color-burn") {
+    return BlendMode::ColorBurn;
+  }
+  if (value == "difference") {
+    return BlendMode::Difference;
+  }
+  if (value == "exclusion") {
+    return BlendMode::Exclusion;
+  }
+  if (value == "hue") {
+    return BlendMode::Hue;
+  }
+  if (value == "saturation") {
+    return BlendMode::Saturation;
+  }
+  if (value == "color") {
+    return BlendMode::Color;
+  }
+  if (value == "luminosity") {
+    return BlendMode::Luminosity;
+  }
+  if (value == "add") {
+    return BlendMode::Add;
+  }
+  if (value == "subtract") {
+    return BlendMode::Subtract;
+  }
+  if (value == "darken") {
+    return BlendMode::Darken;
+  }
+  if (value == "lighten") {
+    return BlendMode::Lighten;
+  }
+  return BlendMode::Normal;
 }
 
 }  // namespace qco::core

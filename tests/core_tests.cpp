@@ -30,6 +30,38 @@ void documentRejectsInvalidCanvasResize()
   assert(document.canvasSize().height == 240);
 }
 
+void documentPreservesExplicitLayerMetadata()
+{
+  auto document = qco::core::Document::create("Test", {320, 240});
+
+  qco::core::Layer layer;
+  layer.id = 42;
+  layer.name = "Imported";
+  layer.type = qco::core::LayerType::Raster;
+  layer.position = {5, 7};
+  layer.size = {10, 11};
+  layer.visible = false;
+  layer.opacity = 0.4;
+
+  assert(document.addLayer(layer));
+  assert(document.addLayer(layer) == false);
+  assert(document.setLayerVisibility(42, true));
+  assert(document.setLayerOpacity(42, 1.5));
+  assert(document.setLayerPosition(42, {9, 10}));
+  assert(document.setLayerName(42, "Renamed"));
+
+  const auto* imported = document.findLayer(42);
+  assert(imported != nullptr);
+  assert(imported->name == "Renamed");
+  assert(imported->visible);
+  assert(imported->opacity == 1.0);
+  assert(imported->position.x == 9);
+  assert(imported->position.y == 10);
+
+  const auto nextId = document.addLayer("Next", qco::core::LayerType::Raster, {1, 1});
+  assert(nextId == 43);
+}
+
 void undoStackDropsRedoBranch()
 {
   int value = 0;
@@ -63,6 +95,7 @@ int main()
 {
   documentKeepsLayerOrder();
   documentRejectsInvalidCanvasResize();
+  documentPreservesExplicitLayerMetadata();
   undoStackDropsRedoBranch();
   return 0;
 }

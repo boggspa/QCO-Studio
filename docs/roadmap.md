@@ -1,0 +1,34 @@
+# QCO Studio Roadmap
+
+## Phase 1 Closeout
+
+- Open and reopen native `.qco` projects.
+- Track dirty documents and prompt to save before close, new document, or open.
+- Wire undo/redo to real document actions.
+- Add raster layer creation and basic layer visibility/reorder controls.
+- Keep a small app smoke test in CI.
+
+## Milestone 2: Native Round Trip And Layer Basics
+
+- Preserve layered `.qco` documents with raster payloads and metadata.
+- Add duplicate, rename, reorder, visibility, opacity, and move operations.
+- Export from document state.
+- Keep undo/redo attached to all layer operations.
+
+## V1 Spine
+
+- Add basic brush, eraser, fill, crop, text, and shape tools.
+- Add native project reopen tests for text/vector payloads as they land.
+- Keep destructive operations explicit and undoable.
+
+## Rendering And File Pipeline
+
+- Introduce the Skia renderer abstraction.
+- Add tiled rendering and dirty rectangle scheduling.
+- Add OpenImageIO, OpenColorIO/LittleCMS, LibRaw, and metadata support after license review and integration seams are ready.
+
+## Collaboration
+
+- Maintain labels for `phase-1`, `v1`, `rendering`, `layers`, `tools`, `file-format`, and `ui`.
+- Track milestones in GitHub issues/projects.
+- Protect `main` and use pull requests once the initial infrastructure commit is pushed.

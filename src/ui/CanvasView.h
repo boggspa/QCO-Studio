@@ -33,6 +33,9 @@ public:
   void setLayers(QVector<LayerImage> layers);
   [[nodiscard]] const QVector<LayerImage>& layers() const noexcept;
 
+  void setSelectedLayerId(std::uint64_t id);
+  [[nodiscard]] std::uint64_t selectedLayerId() const noexcept;
+
   void setZoom(qreal zoom);
   [[nodiscard]] qreal zoom() const noexcept;
 
@@ -41,6 +44,10 @@ public:
 
 signals:
   void zoomChanged(qreal zoom);
+  void layerSelected(std::uint64_t id);
+  void layerMoveStarted(std::uint64_t id);
+  void layerMovePreview(std::uint64_t id, QPoint position);
+  void layerMoveCommitted(std::uint64_t id, QPoint oldPosition, QPoint newPosition);
 
 protected:
   void paintEvent(QPaintEvent* event) override;
@@ -53,13 +60,19 @@ protected:
 private:
   [[nodiscard]] QPointF documentToWidget(QPointF point) const;
   [[nodiscard]] QPointF widgetToDocument(QPointF point) const;
+  [[nodiscard]] std::uint64_t layerAt(QPointF documentPoint) const;
   void drawCheckerboard(QPainter& painter, const QRectF& rect) const;
 
   QSize documentSize_ = QSize(1280, 800);
   QVector<LayerImage> layers_;
+  std::uint64_t selectedLayerId_ = 0;
   qreal zoom_ = 1.0;
   QPointF pan_;
   bool panning_ = false;
+  bool movingLayer_ = false;
+  QPoint moveStartPosition_;
+  QPoint moveLastPosition_;
+  QPointF moveOffset_;
   QPoint lastMousePosition_;
 };
 

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  macos:
+    name: macOS Qt build and tests
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt base
+        run: brew install qtbase
+
+      - name: Configure core
+        run: cmake --preset core
+
+      - name: Build core
+        run: cmake --build --preset core
+
+      - name: Test core
+        run: ctest --preset core
+
+      - name: Configure desktop
+        run: cmake --preset desktop -DCMAKE_PREFIX_PATH="$(brew --prefix qtbase)"
+
+      - name: Build desktop
+        run: cmake --build --preset desktop
+
+      - name: Test desktop
+        run: ctest --test-dir build/desktop --output-on-failure

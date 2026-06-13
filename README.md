@@ -9,8 +9,10 @@ This repository is currently Phase 1. The app skeleton includes:
 - Pan and zoom canvas view with checkerboard transparency.
 - PNG/JPEG export through Qt image IO.
 - Native `.qco` project package skeleton saved as a ZIP-compatible archive.
+- Native `.qco` project reopen for Phase 1 raster-layer packages.
+- Basic raster layer add, duplicate, rename, reorder, visibility, opacity, and canvas move controls.
 - Core document/layer model and command undo stack.
-- Core unit tests that build without Qt.
+- Core, archive round-trip, and canvas smoke tests.
 
 ## Build
 
@@ -53,3 +55,4 @@ The local machine has CMake, Git, and Homebrew `qtbase` installed. Both the core
 - Product naming still needs legal clearance before public launch. The project was renamed away from Qimage-branded wording because existing Qimage photo-printing products are in the market.
 - The UI must remain familiar to professional raster/vector users without copying Adobe, Canva, GIMP, or other product artwork, naming, icons, or exact layouts.
 - See [docs/technical-design.md](docs/technical-design.md) for the Phase 1 design pass and architecture plan.
+- See [docs/roadmap.md](docs/roadmap.md) for the active milestone order.
