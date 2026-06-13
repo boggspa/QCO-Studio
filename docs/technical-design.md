@@ -30,7 +30,7 @@ docs           Architecture, licensing, roadmap, legal notes
 
 ## 3. Dependency List With Licenses
 
-See [license-register.md](license-register.md). Phase 1 activates only Qt 6, Qt Image Formats, and CMake. Skia, OpenImageIO, OpenColorIO, LibRaw, Exiv2, FreeType, HarfBuzz, and logging/test libraries are intentionally deferred until their integration points are real.
+See [license-register.md](license-register.md) and [dependency-review.md](dependency-review.md). Phase 1 activates only Qt 6, Qt Image Formats, and CMake. Skia, OpenImageIO, OpenColorIO, LittleCMS, LibRaw, metadata libraries, FreeType, HarfBuzz, and logging/test libraries are intentionally deferred until their integration points are real and their distribution obligations are recorded.
 
 ## 4. V1 Feature List
 
@@ -100,6 +100,7 @@ The default workspace uses a left tool rail, top context bar, center canvas, rig
 - Keep dependency licenses and attributions current.
 - Treat the name "QCO Studio" as provisional until proper legal clearance. The project moved away from Qimage-branded wording because existing Qimage photo printing products are publicly visible, including Qimage Ultimate and Qimage One.
 - Avoid GPL dependencies unless the product license strategy explicitly allows them.
+- Exiv2 is currently treated as blocked for default linked use because its upstream license is GPL-2.0-or-later. Prefer sidecar metadata first, then evaluate BSD/LGPL/out-of-process alternatives before adopting a metadata library.
 
 ## 14. Build Plan
 

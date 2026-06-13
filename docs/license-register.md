@@ -8,12 +8,15 @@ This register tracks intended and active dependencies. Do not add a runtime depe
 | Qt Image Formats | Active in app packaging | TIFF/WebP and additional Qt image IO plugins | LGPL/commercial depending on distribution model; transitive codec licenses vary | Installed as `qtimageformats` where available. Review libtiff/libwebp and other codec notices before signed distribution. |
 | CMake | Active | Build system | BSD-3-Clause | Build-time only. |
 | vcpkg | Manifest only | Dependency acquisition | MIT | Optional; not vendored. |
-| Skia | Deferred | GPU/canvas renderer | BSD-3-Clause | Bring in after tile/render abstraction lands. |
-| OpenImageIO | Deferred | Professional image import/export | BSD-3-Clause | Review transitive codecs. |
-| OpenColorIO | Deferred | Color pipeline | BSD-3-Clause | Needed before serious color-managed export. |
-| LittleCMS | Deferred | ICC profile handling | MIT-like | Already present locally through Homebrew as `little-cms2`. |
-| LibRaw | Deferred | RAW decoding | LGPL/CDDL dual license | Distribution choice needs review. |
-| Exiv2 | Deferred | EXIF/IPTC/XMP metadata | GPL/commercial depending on version/terms | License risk; evaluate before adoption. |
+| Skia | Deferred, license-reviewed | GPU/canvas renderer | BSD-style / BSD-3-Clause signal | Acceptable candidate after optional build packaging is ready. Renderer and tile boundaries are already in place. |
+| OpenImageIO | Deferred, license-reviewed | Professional image import/export | Apache-2.0 for original code; compatible third-party code; docs CC-BY-4.0 | Previous BSD-only assumption is stale. Review bundled codecs and notices before packaging. |
+| OpenColorIO | Deferred, license-reviewed | Color pipeline | BSD-3-Clause | Suitable candidate for view/display transforms after color test assets are selected. |
+| LittleCMS | Deferred, license-reviewed | ICC profile handling | MIT | Suitable candidate for ICC transforms. Include attribution notice before signed distribution. |
+| LibRaw | Deferred, license-reviewed | RAW decoding | LGPL-2.1 or CDDL-1.0 choice | Keep behind optional RAW provider boundary until linking and notice strategy is decided. |
+| Exiv2 | Deferred, blocked by license risk | EXIF/IPTC/XMP metadata | GPL-2.0-or-later | Do not link by default unless product license strategy changes or legal clearance is obtained. Evaluate alternatives first. |
+| Adobe XMP Toolkit SDK | Deferred, candidate | XMP metadata | BSD-3-Clause | Candidate for XMP support; not a complete EXIF/IPTC replacement. |
+| libexif | Deferred, candidate | EXIF metadata | LGPL-2.1-family signal | Candidate for EXIF-only support if linking/notices fit distribution strategy. |
+| ExifTool | Deferred, candidate tool | Broad metadata read/write | Same terms as Perl | Consider only as optional out-of-process integration with strict command sanitization. |
 | FreeType | Deferred | Text/glyph rendering support | FreeType License/GPLv2 option | Usually acceptable; record exact terms. |
 | HarfBuzz | Deferred | Text shaping | MIT | Useful for advanced typography. |
 | zstd or zip library | Deferred | Native project packaging | Varies | Phase 1 uses a tiny internal stored-ZIP writer for skeleton saves only. |
