@@ -1,6 +1,7 @@
 #include "ui/MainWindow.h"
 
 #include "app/Logging.h"
+#include "render/DocumentRenderer.h"
 #include "ui/ImageExport.h"
 #include "ui/ProjectArchive.h"
 
@@ -2017,20 +2018,14 @@ QImage MainWindow::renderDocumentComposite(const QColor& background) const
     return {};
   }
 
-  QImage output(toQtSize(document_->canvasSize()), QImage::Format_ARGB32_Premultiplied);
-  output.fill(background);
-
-  QPainter painter(&output);
-  painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+  QVector<qco::render::LayerImage> layerImages;
+  layerImages.reserve(layers_.size());
   for (const auto& layer : layers_) {
-    if (!layer.visible || layer.image.isNull()) {
-      continue;
-    }
-    painter.setOpacity(std::clamp(layer.opacity, 0.0, 1.0));
-    painter.drawImage(layer.position, layer.image);
+    layerImages.push_back({layer.id, layer.image});
   }
-  painter.end();
-  return output;
+
+  const qco::render::QtDocumentRenderer renderer;
+  return renderer.render(*document_, layerImages, background);
 }
 
 QVector<ProjectRasterLayer> MainWindow::rasterLayerPayloads() const

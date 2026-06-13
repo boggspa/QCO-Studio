@@ -69,6 +69,8 @@ The format must preserve layer structure, masks, editable text, vectors, adjustm
 
 The long-term canvas is an infinite pasteboard around fixed document bounds. Rendering should run through a tile renderer, dirty rectangle scheduler, layer compositor, mask/vector/text renderers, and GPU abstraction. Phase 1 uses a Qt `QWidget` canvas with checkerboard, document bounds, pan/zoom, and raster layer drawing so UI workflows can progress before Skia lands.
 
+The first rendering boundary is active in `src/render`: document export now calls a `DocumentRenderer` interface with a Qt-backed implementation. The core `Document` remains authoritative for layer order, visibility, opacity, and position, while layer image payloads provide the current pixel previews. This keeps the future Skia backend replaceable without changing export callers.
+
 ## 8. Layer Model Architecture
 
 Layers have stable ids, names, type, visibility, lock state, opacity, blend mode, bounds, and type-specific payload references. The core model owns ordering and metadata; renderer/image modules own pixel payloads. Groups and masks should be explicit graph relationships rather than hidden UI-only nesting.
