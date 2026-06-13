@@ -68,7 +68,7 @@ jobs:
       - name: Install Qt
         run: |
           python3 -m pip install --upgrade pip aqtinstall
-          python3 -m aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 -O "$RUNNER_TEMP/Qt" --archives qtbase
+          python3 -m aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 -O "$RUNNER_TEMP/Qt" --archives icu qtbase
           echo "QT_PREFIX=$RUNNER_TEMP/Qt/$QT_VERSION/gcc_64" >> "$GITHUB_ENV"
 
       - name: Configure core
