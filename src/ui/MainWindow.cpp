@@ -695,6 +695,98 @@ void MainWindow::handleToolDocumentClick(CanvasView::Tool tool, QPoint documentP
   }
 }
 
+void MainWindow::updateSelectedTextLayer()
+{
+  const auto* selected = selectedLayer();
+  if (!document_ || selected == nullptr || selectedLayerImage() == nullptr || selected->type != qco::core::LayerType::Text) {
+    statusBar()->showMessage(tr("Select a text layer to update"), 3000);
+    return;
+  }
+
+  const auto text = textContentInput_ == nullptr ? QString() : textContentInput_->text().trimmed();
+  if (text.isEmpty()) {
+    statusBar()->showMessage(tr("Enter text in Tool Options first"), 3000);
+    return;
+  }
+
+  qco::core::TextLayerPayload payload;
+  payload.text = text.toStdString();
+  payload.color = textColor_.name(QColor::HexArgb).toStdString();
+  payload.pointSize = textPointSize_;
+
+  const auto image = renderTextLayerImage(text, textColor_, textPointSize_);
+  const auto unchanged = selected->textPayload.has_value()
+                         && selected->textPayload->text == payload.text
+                         && selected->textPayload->color == payload.color
+                         && selected->textPayload->pointSize == payload.pointSize
+                         && selected->size.width == image.width()
+                         && selected->size.height == image.height();
+  if (unchanged) {
+    statusBar()->showMessage(tr("Selected text layer is already up to date"), 2000);
+    return;
+  }
+
+  auto before = captureState();
+  auto* layer = selectedLayer();
+  auto* imageLayer = selectedLayerImage();
+  if (layer == nullptr || imageLayer == nullptr) {
+    return;
+  }
+  layer->name = text.toStdString();
+  layer->size = toCoreSize(image.size());
+  layer->textPayload = std::move(payload);
+  imageLayer->name = text;
+  imageLayer->image = image;
+
+  pushStateCommand(tr("Update Text Layer"), std::move(before), captureState());
+}
+
+void MainWindow::updateSelectedShapeLayer()
+{
+  const auto* selected = selectedLayer();
+  if (!document_ || selected == nullptr || selectedLayerImage() == nullptr || selected->type != qco::core::LayerType::Shape) {
+    statusBar()->showMessage(tr("Select a shape layer to update"), 3000);
+    return;
+  }
+
+  const auto shapeKey = shapeTypeInput_ == nullptr ? QStringLiteral("rectangle") : shapeTypeInput_->currentData().toString();
+  const auto shape = shapeTypeInput_ == nullptr ? tr("Rectangle") : shapeTypeInput_->currentText();
+  const QSize size(shapeWidth_, shapeHeight_);
+
+  qco::core::ShapeLayerPayload payload;
+  payload.shape = shapeKey.toStdString();
+  payload.fillColor = shapeFillColor_.name(QColor::HexArgb).toStdString();
+  payload.strokeColor = shapeStrokeColor_.name(QColor::HexArgb).toStdString();
+  payload.strokeWidth = shapeStrokeWidth_;
+
+  const auto image = renderShapeLayerImage(shapeKey, size, shapeFillColor_, shapeStrokeColor_, shapeStrokeWidth_);
+  const auto unchanged = selected->shapePayload.has_value()
+                         && selected->shapePayload->shape == payload.shape
+                         && selected->shapePayload->fillColor == payload.fillColor
+                         && selected->shapePayload->strokeColor == payload.strokeColor
+                         && selected->shapePayload->strokeWidth == payload.strokeWidth
+                         && selected->size.width == image.width()
+                         && selected->size.height == image.height();
+  if (unchanged) {
+    statusBar()->showMessage(tr("Selected shape layer is already up to date"), 2000);
+    return;
+  }
+
+  auto before = captureState();
+  auto* layer = selectedLayer();
+  auto* imageLayer = selectedLayerImage();
+  if (layer == nullptr || imageLayer == nullptr) {
+    return;
+  }
+  layer->name = shape.toStdString();
+  layer->size = toCoreSize(image.size());
+  layer->shapePayload = std::move(payload);
+  imageLayer->name = shape;
+  imageLayer->image = image;
+
+  pushStateCommand(tr("Update Shape Layer"), std::move(before), captureState());
+}
+
 void MainWindow::cropDocumentToRect(QRect documentRect)
 {
   if (!document_) {
@@ -765,57 +857,71 @@ void MainWindow::createActions()
   const auto* style = QApplication::style();
 
   newAction_ = new QAction(style->standardIcon(QStyle::SP_FileIcon), tr("New"), this);
+  newAction_->setObjectName(QStringLiteral("newAction"));
   newAction_->setShortcut(QKeySequence::New);
   connect(newAction_, &QAction::triggered, this, &MainWindow::newDocument);
 
   openProjectAction_ = new QAction(style->standardIcon(QStyle::SP_DirOpenIcon), tr("Open Project"), this);
+  openProjectAction_->setObjectName(QStringLiteral("openProjectAction"));
   openProjectAction_->setShortcut(QKeySequence::Open);
   connect(openProjectAction_, &QAction::triggered, this, &MainWindow::openProject);
 
   openImageAction_ = new QAction(style->standardIcon(QStyle::SP_DirOpenIcon), tr("Open Image"), this);
+  openImageAction_->setObjectName(QStringLiteral("openImageAction"));
   openImageAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O));
   connect(openImageAction_, &QAction::triggered, this, &MainWindow::openImage);
 
   saveAction_ = new QAction(style->standardIcon(QStyle::SP_DialogSaveButton), tr("Save Project"), this);
+  saveAction_->setObjectName(QStringLiteral("saveProjectAction"));
   saveAction_->setShortcut(QKeySequence::Save);
   connect(saveAction_, &QAction::triggered, this, &MainWindow::saveProject);
 
   exportAction_ = new QAction(tr("Export Image"), this);
+  exportAction_->setObjectName(QStringLiteral("exportImageAction"));
   exportAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E));
   connect(exportAction_, &QAction::triggered, this, &MainWindow::exportImage);
 
   addRasterLayerAction_ = new QAction(tr("Add Raster Layer"), this);
+  addRasterLayerAction_->setObjectName(QStringLiteral("addRasterLayerAction"));
   addRasterLayerAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_N));
   connect(addRasterLayerAction_, &QAction::triggered, this, &MainWindow::addRasterLayer);
 
   duplicateLayerAction_ = new QAction(tr("Duplicate Layer"), this);
+  duplicateLayerAction_->setObjectName(QStringLiteral("duplicateLayerAction"));
   duplicateLayerAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_J));
   connect(duplicateLayerAction_, &QAction::triggered, this, &MainWindow::duplicateSelectedLayer);
 
   renameLayerAction_ = new QAction(tr("Rename Layer"), this);
+  renameLayerAction_->setObjectName(QStringLiteral("renameLayerAction"));
   connect(renameLayerAction_, &QAction::triggered, this, &MainWindow::renameSelectedLayer);
 
   layerUpAction_ = new QAction(tr("Move Layer Up"), this);
+  layerUpAction_->setObjectName(QStringLiteral("moveLayerUpAction"));
   layerUpAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
   connect(layerUpAction_, &QAction::triggered, this, &MainWindow::moveSelectedLayerUp);
 
   layerDownAction_ = new QAction(tr("Move Layer Down"), this);
+  layerDownAction_->setObjectName(QStringLiteral("moveLayerDownAction"));
   layerDownAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketLeft));
   connect(layerDownAction_, &QAction::triggered, this, &MainWindow::moveSelectedLayerDown);
 
   fitAction_ = new QAction(tr("Fit to View"), this);
+  fitAction_->setObjectName(QStringLiteral("fitToViewAction"));
   fitAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
   connect(fitAction_, &QAction::triggered, this, &MainWindow::fitCanvasToView);
 
   actualSizeAction_ = new QAction(tr("Actual Size"), this);
+  actualSizeAction_->setObjectName(QStringLiteral("actualSizeAction"));
   actualSizeAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_1));
   connect(actualSizeAction_, &QAction::triggered, this, &MainWindow::setCanvasToActualSize);
 
   undoAction_ = new QAction(tr("Undo"), this);
+  undoAction_->setObjectName(QStringLiteral("undoAction"));
   undoAction_->setShortcut(QKeySequence::Undo);
   connect(undoAction_, &QAction::triggered, this, &MainWindow::undo);
 
   redoAction_ = new QAction(tr("Redo"), this);
+  redoAction_->setObjectName(QStringLiteral("redoAction"));
   redoAction_->setShortcut(QKeySequence::Redo);
   connect(redoAction_, &QAction::triggered, this, &MainWindow::redo);
 }
@@ -945,6 +1051,7 @@ void MainWindow::createPanels()
   auto* historyDock = new QDockWidget(tr("History"), this);
   historyDock->setObjectName(QStringLiteral("historyDock"));
   historyList_ = new QListWidget(historyDock);
+  historyList_->setObjectName(QStringLiteral("historyList"));
   historyDock->setWidget(historyList_);
   addDockWidget(Qt::RightDockWidgetArea, historyDock);
   tabifyDockWidget(propertiesDock, historyDock);
@@ -971,21 +1078,37 @@ void MainWindow::createToolOptionsPanel()
   };
 
   brushColorButton_ = new QPushButton(optionsPanel);
+  brushColorButton_->setObjectName(QStringLiteral("brushColorButton"));
   brushSizeInput_ = makeSpinBox(1, 256, brushSize_);
+  brushSizeInput_->setObjectName(QStringLiteral("brushSizeInput"));
   brushOpacityInput_ = makeSpinBox(1, 100, brushOpacity_);
+  brushOpacityInput_->setObjectName(QStringLiteral("brushOpacityInput"));
   eraserSizeInput_ = makeSpinBox(1, 256, eraserSize_);
+  eraserSizeInput_->setObjectName(QStringLiteral("eraserSizeInput"));
   fillColorButton_ = new QPushButton(optionsPanel);
+  fillColorButton_->setObjectName(QStringLiteral("fillColorButton"));
   fillToleranceInput_ = makeSpinBox(0, 255, fillTolerance_);
+  fillToleranceInput_->setObjectName(QStringLiteral("fillToleranceInput"));
+  textContentInput_ = new QLineEdit(tr("Text"), optionsPanel);
+  textContentInput_->setObjectName(QStringLiteral("textContentInput"));
   textColorButton_ = new QPushButton(optionsPanel);
+  textColorButton_->setObjectName(QStringLiteral("textColorButton"));
   textSizeInput_ = makeSpinBox(6, 240, textPointSize_);
+  textSizeInput_->setObjectName(QStringLiteral("textSizeInput"));
   shapeTypeInput_ = new QComboBox(optionsPanel);
+  shapeTypeInput_->setObjectName(QStringLiteral("shapeTypeInput"));
   shapeTypeInput_->addItem(tr("Rectangle"), QStringLiteral("rectangle"));
   shapeTypeInput_->addItem(tr("Ellipse"), QStringLiteral("ellipse"));
   shapeWidthInput_ = makeSpinBox(24, 4096, shapeWidth_);
+  shapeWidthInput_->setObjectName(QStringLiteral("shapeWidthInput"));
   shapeHeightInput_ = makeSpinBox(24, 4096, shapeHeight_);
+  shapeHeightInput_->setObjectName(QStringLiteral("shapeHeightInput"));
   shapeFillColorButton_ = new QPushButton(optionsPanel);
+  shapeFillColorButton_->setObjectName(QStringLiteral("shapeFillColorButton"));
   shapeStrokeColorButton_ = new QPushButton(optionsPanel);
+  shapeStrokeColorButton_->setObjectName(QStringLiteral("shapeStrokeColorButton"));
   shapeStrokeWidthInput_ = makeSpinBox(0, 128, shapeStrokeWidth_);
+  shapeStrokeWidthInput_->setObjectName(QStringLiteral("shapeStrokeWidthInput"));
 
   updateColorButton(brushColorButton_, brushColor_);
   updateColorButton(fillColorButton_, fillColor_);
@@ -1023,6 +1146,7 @@ void MainWindow::createToolOptionsPanel()
   form->addRow(tr("Eraser Size"), eraserSizeInput_);
   form->addRow(tr("Fill Color"), fillColorButton_);
   form->addRow(tr("Fill Tolerance"), fillToleranceInput_);
+  form->addRow(tr("Text"), textContentInput_);
   form->addRow(tr("Text Color"), textColorButton_);
   form->addRow(tr("Text Size"), textSizeInput_);
   form->addRow(tr("Shape"), shapeTypeInput_);
@@ -1033,7 +1157,18 @@ void MainWindow::createToolOptionsPanel()
   form->addRow(tr("Stroke Width"), shapeStrokeWidthInput_);
   optionsLayout->addLayout(form);
 
+  updateTextLayerButton_ = new QPushButton(tr("Update Selected Text"), optionsPanel);
+  updateTextLayerButton_->setObjectName(QStringLiteral("updateTextLayerButton"));
+  connect(updateTextLayerButton_, &QPushButton::clicked, this, &MainWindow::updateSelectedTextLayer);
+  optionsLayout->addWidget(updateTextLayerButton_);
+
+  updateShapeLayerButton_ = new QPushButton(tr("Update Selected Shape"), optionsPanel);
+  updateShapeLayerButton_->setObjectName(QStringLiteral("updateShapeLayerButton"));
+  connect(updateShapeLayerButton_, &QPushButton::clicked, this, &MainWindow::updateSelectedShapeLayer);
+  optionsLayout->addWidget(updateShapeLayerButton_);
+
   cropSelectedLayerButton_ = new QPushButton(tr("Crop To Selected Layer"), optionsPanel);
+  cropSelectedLayerButton_->setObjectName(QStringLiteral("cropSelectedLayerButton"));
   connect(cropSelectedLayerButton_, &QPushButton::clicked, this, &MainWindow::cropToSelectedLayer);
   optionsLayout->addWidget(cropSelectedLayerButton_);
   optionsLayout->addStretch(1);
@@ -1063,6 +1198,7 @@ void MainWindow::setDocument(qco::core::Document document, QVector<CanvasView::L
   syncCanvasLayers();
 
   updateLayerPanel();
+  updateToolOptionsFromSelectedLayer();
   updatePropertiesPanel();
   updateHistoryPanel();
   updateActions();
@@ -1078,6 +1214,7 @@ void MainWindow::applyState(const DocumentState& state)
   canvas_->setDocumentSize(toQtSize(document_->canvasSize()));
   syncCanvasLayers();
   updateLayerPanel();
+  updateToolOptionsFromSelectedLayer();
   updatePropertiesPanel();
   updateHistoryPanel();
   updateActions();
@@ -1212,6 +1349,76 @@ void MainWindow::updateActions()
   if (cropSelectedLayerButton_ != nullptr) {
     cropSelectedLayerButton_->setEnabled(hasSelectedLayer);
   }
+  if (updateTextLayerButton_ != nullptr) {
+    updateTextLayerButton_->setEnabled(
+      hasSelectedLayer && selectedLayer() != nullptr && selectedLayer()->type == qco::core::LayerType::Text);
+  }
+  if (updateShapeLayerButton_ != nullptr) {
+    updateShapeLayerButton_->setEnabled(
+      hasSelectedLayer && selectedLayer() != nullptr && selectedLayer()->type == qco::core::LayerType::Shape);
+  }
+}
+
+void MainWindow::updateToolOptionsFromSelectedLayer()
+{
+  const auto* layer = selectedLayer();
+  if (layer == nullptr) {
+    return;
+  }
+
+  if (layer->type == qco::core::LayerType::Text && layer->textPayload.has_value()) {
+    const auto& payload = *layer->textPayload;
+    if (textContentInput_ != nullptr) {
+      const QSignalBlocker blocker(textContentInput_);
+      textContentInput_->setText(QString::fromStdString(payload.text));
+    }
+    if (textSizeInput_ != nullptr) {
+      textPointSize_ = std::clamp(payload.pointSize, textSizeInput_->minimum(), textSizeInput_->maximum());
+      const QSignalBlocker blocker(textSizeInput_);
+      textSizeInput_->setValue(textPointSize_);
+    }
+    const QColor payloadColor(QString::fromStdString(payload.color));
+    if (payloadColor.isValid()) {
+      textColor_ = payloadColor;
+      updateColorButton(textColorButton_, textColor_);
+    }
+  } else if (layer->type == qco::core::LayerType::Shape && layer->shapePayload.has_value()) {
+    const auto& payload = *layer->shapePayload;
+    const auto payloadShape = QString::fromStdString(payload.shape);
+    if (shapeTypeInput_ != nullptr) {
+      const auto index = shapeTypeInput_->findData(payloadShape);
+      if (index >= 0) {
+        const QSignalBlocker blocker(shapeTypeInput_);
+        shapeTypeInput_->setCurrentIndex(index);
+      }
+    }
+    if (shapeWidthInput_ != nullptr) {
+      shapeWidth_ = std::clamp(layer->size.width, shapeWidthInput_->minimum(), shapeWidthInput_->maximum());
+      const QSignalBlocker blocker(shapeWidthInput_);
+      shapeWidthInput_->setValue(shapeWidth_);
+    }
+    if (shapeHeightInput_ != nullptr) {
+      shapeHeight_ = std::clamp(layer->size.height, shapeHeightInput_->minimum(), shapeHeightInput_->maximum());
+      const QSignalBlocker blocker(shapeHeightInput_);
+      shapeHeightInput_->setValue(shapeHeight_);
+    }
+    if (shapeStrokeWidthInput_ != nullptr) {
+      shapeStrokeWidth_ =
+        std::clamp(payload.strokeWidth, shapeStrokeWidthInput_->minimum(), shapeStrokeWidthInput_->maximum());
+      const QSignalBlocker blocker(shapeStrokeWidthInput_);
+      shapeStrokeWidthInput_->setValue(shapeStrokeWidth_);
+    }
+    const QColor fill(QString::fromStdString(payload.fillColor));
+    if (fill.isValid()) {
+      shapeFillColor_ = fill;
+      updateColorButton(shapeFillColorButton_, shapeFillColor_);
+    }
+    const QColor stroke(QString::fromStdString(payload.strokeColor));
+    if (stroke.isValid()) {
+      shapeStrokeColor_ = stroke;
+      updateColorButton(shapeStrokeColorButton_, shapeStrokeColor_);
+    }
+  }
 }
 
 void MainWindow::updateWindowTitle()
@@ -1246,6 +1453,7 @@ void MainWindow::setSelectedLayerId(std::uint64_t id)
   selectedLayerId_ = id;
   canvas_->setSelectedLayerId(id);
   updateLayerPanel();
+  updateToolOptionsFromSelectedLayer();
   updatePropertiesPanel();
   updateActions();
 }
@@ -1308,7 +1516,12 @@ void MainWindow::fillSelectedLayerAt(QPoint documentPoint)
     return;
   }
 
-  const auto before = captureState();
+  auto before = captureState();
+  imageLayer = selectedLayerImage();
+  if (imageLayer == nullptr) {
+    return;
+  }
+
   QImage& image = imageLayer->image;
   const QColor targetColor = image.pixelColor(localPoint);
   if (colorsWithinTolerance(targetColor, fillColor_, fillTolerance_)) {
@@ -1341,35 +1554,14 @@ void MainWindow::addTextLayerAt(QPoint documentPoint)
     return;
   }
 
-  bool ok = false;
-  const auto text = QInputDialog::getText(
-    this,
-    tr("Add Text"),
-    tr("Text"),
-    QLineEdit::Normal,
-    tr("Text"),
-    &ok);
-
-  if (!ok || text.trimmed().isEmpty()) {
+  const auto text = textContentInput_ == nullptr ? QStringLiteral("Text") : textContentInput_->text().trimmed();
+  if (text.isEmpty()) {
+    statusBar()->showMessage(tr("Enter text in Tool Options first"), 3000);
     return;
   }
 
   auto before = captureState();
-  QFont font;
-  font.setPointSize(textPointSize_);
-  font.setBold(false);
-  const QFontMetrics metrics(font);
-  const QRect textBounds = metrics.boundingRect(text).adjusted(-8, -8, 8, 8);
-
-  QImage image(textBounds.size(), QImage::Format_ARGB32_Premultiplied);
-  image.fill(Qt::transparent);
-
-  QPainter painter(&image);
-  painter.setRenderHint(QPainter::Antialiasing, true);
-  painter.setFont(font);
-  painter.setPen(textColor_);
-  painter.drawText(QPoint(8, 8 + metrics.ascent()), text);
-  painter.end();
+  const auto image = renderTextLayerImage(text, textColor_, textPointSize_);
 
   const auto layerId = document_->addLayer(
     text.toStdString(),
@@ -1405,24 +1597,12 @@ void MainWindow::addShapeLayerAt(QPoint documentPoint)
   const auto shape = shapeTypeInput_ == nullptr ? tr("Rectangle") : shapeTypeInput_->currentText();
 
   auto before = captureState();
-  QImage image(QSize(shapeWidth_, shapeHeight_), QImage::Format_ARGB32_Premultiplied);
-  image.fill(Qt::transparent);
-
-  QPainter painter(&image);
-  painter.setRenderHint(QPainter::Antialiasing, true);
-  if (shapeStrokeWidth_ == 0) {
-    painter.setPen(Qt::NoPen);
-  } else {
-    painter.setPen(QPen(shapeStrokeColor_, shapeStrokeWidth_));
-  }
-  painter.setBrush(shapeFillColor_);
-  const QRectF bounds(8, 8, image.width() - 16, image.height() - 16);
-  if (shapeKey == QStringLiteral("ellipse")) {
-    painter.drawEllipse(bounds);
-  } else {
-    painter.drawRect(bounds);
-  }
-  painter.end();
+  const auto image = renderShapeLayerImage(
+    shapeKey,
+    QSize(shapeWidth_, shapeHeight_),
+    shapeFillColor_,
+    shapeStrokeColor_,
+    shapeStrokeWidth_);
 
   const auto layerId = document_->addLayer(
     shape.toStdString(),
@@ -1462,6 +1642,61 @@ void MainWindow::cropToSelectedLayer()
   }
 
   cropDocumentToRect(cropRect);
+}
+
+QImage MainWindow::renderTextLayerImage(const QString& text, const QColor& color, int pointSize) const
+{
+  QFont font;
+  font.setPointSize(std::clamp(pointSize, 1, 240));
+  font.setBold(false);
+
+  const QFontMetrics metrics(font);
+  const QRect textBounds = metrics.boundingRect(text).adjusted(-8, -8, 8, 8);
+  const QSize imageSize(std::max(1, textBounds.width()), std::max(1, textBounds.height()));
+
+  QImage image(imageSize, QImage::Format_ARGB32_Premultiplied);
+  image.fill(Qt::transparent);
+
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  painter.setFont(font);
+  painter.setPen(color);
+  painter.drawText(QPoint(8, 8 + metrics.ascent()), text);
+  painter.end();
+  return image;
+}
+
+QImage MainWindow::renderShapeLayerImage(
+  const QString& shapeKey,
+  QSize size,
+  const QColor& fillColor,
+  const QColor& strokeColor,
+  int strokeWidth) const
+{
+  size = size.expandedTo(QSize(1, 1));
+
+  QImage image(size, QImage::Format_ARGB32_Premultiplied);
+  image.fill(Qt::transparent);
+
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  if (strokeWidth == 0) {
+    painter.setPen(Qt::NoPen);
+  } else {
+    painter.setPen(QPen(strokeColor, strokeWidth));
+  }
+  painter.setBrush(fillColor);
+
+  const auto halfShortestSide = std::max<qreal>(1.0, std::min(image.width(), image.height()) / 2.0 - 1.0);
+  const auto margin = std::min<qreal>(std::max<qreal>(4.0, strokeWidth / 2.0 + 4.0), halfShortestSide);
+  const QRectF bounds(margin, margin, image.width() - (margin * 2.0), image.height() - (margin * 2.0));
+  if (shapeKey == QStringLiteral("ellipse")) {
+    painter.drawEllipse(bounds);
+  } else {
+    painter.drawRect(bounds);
+  }
+  painter.end();
+  return image;
 }
 
 void MainWindow::updateColorButton(QPushButton* button, const QColor& color)

@@ -9,6 +9,7 @@
 #include <QMainWindow>
 #include <QRect>
 #include <QSettings>
+#include <QSize>
 
 #include <memory>
 #include <optional>
@@ -17,6 +18,7 @@ class QAction;
 class QActionGroup;
 class QComboBox;
 class QLabel;
+class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
 class QDockWidget;
@@ -58,6 +60,8 @@ private slots:
   void commitRasterStroke(CanvasView::Tool tool);
   void handleToolDocumentClick(CanvasView::Tool tool, QPoint documentPoint);
   void cropDocumentToRect(QRect documentRect);
+  void updateSelectedTextLayer();
+  void updateSelectedShapeLayer();
   void fitCanvasToView();
   void setCanvasToActualSize();
   void undo();
@@ -87,6 +91,7 @@ private:
   void updatePropertiesPanel();
   void updateHistoryPanel();
   void updateActions();
+  void updateToolOptionsFromSelectedLayer();
   void updateWindowTitle();
   void setDirty(bool dirty);
   void markCurrentUndoStateClean();
@@ -98,6 +103,13 @@ private:
   void addTextLayerAt(QPoint documentPoint);
   void addShapeLayerAt(QPoint documentPoint);
   void cropToSelectedLayer();
+  [[nodiscard]] QImage renderTextLayerImage(const QString& text, const QColor& color, int pointSize) const;
+  [[nodiscard]] QImage renderShapeLayerImage(
+    const QString& shapeKey,
+    QSize size,
+    const QColor& fillColor,
+    const QColor& strokeColor,
+    int strokeWidth) const;
   void updateColorButton(QPushButton* button, const QColor& color);
   void chooseToolColor(const QString& title, QColor& color, QPushButton* button);
   void rememberDirectory(const QString& filePath);
@@ -126,6 +138,7 @@ private:
   QSpinBox* brushOpacityInput_ = nullptr;
   QSpinBox* eraserSizeInput_ = nullptr;
   QSpinBox* fillToleranceInput_ = nullptr;
+  QLineEdit* textContentInput_ = nullptr;
   QSpinBox* textSizeInput_ = nullptr;
   QSpinBox* shapeWidthInput_ = nullptr;
   QSpinBox* shapeHeightInput_ = nullptr;
@@ -137,6 +150,8 @@ private:
   QPushButton* shapeFillColorButton_ = nullptr;
   QPushButton* shapeStrokeColorButton_ = nullptr;
   QPushButton* cropSelectedLayerButton_ = nullptr;
+  QPushButton* updateTextLayerButton_ = nullptr;
+  QPushButton* updateShapeLayerButton_ = nullptr;
   QActionGroup* toolActionGroup_ = nullptr;
   QPushButton* addLayerButton_ = nullptr;
   QPushButton* duplicateLayerButton_ = nullptr;
