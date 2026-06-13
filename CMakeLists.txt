@@ -41,6 +41,8 @@ if(QCO_STUDIO_BUILD_APP)
     src/image/ColorTransform.h
     src/image/ImageCodec.cpp
     src/image/ImageCodec.h
+    src/image/RawImageProvider.cpp
+    src/image/RawImageProvider.h
     src/render/DocumentRenderer.cpp
     src/render/DocumentRenderer.h
     src/render/TileScheduler.cpp
@@ -164,6 +166,20 @@ if(QCO_STUDIO_BUILD_APP)
 
     add_test(NAME qcostudio_color_transform_tests COMMAND qcostudio_color_transform_tests)
     set_tests_properties(qcostudio_color_transform_tests PROPERTIES TIMEOUT 30)
+
+    qt_add_executable(qcostudio_raw_image_provider_tests
+      tests/raw_image_provider_tests.cpp
+    )
+
+    target_link_libraries(qcostudio_raw_image_provider_tests
+      PRIVATE
+        qcostudio_qt_support
+        Qt6::Core
+        Qt6::Gui
+    )
+
+    add_test(NAME qcostudio_raw_image_provider_tests COMMAND qcostudio_raw_image_provider_tests)
+    set_tests_properties(qcostudio_raw_image_provider_tests PROPERTIES TIMEOUT 30)
 
     qt_add_executable(qcostudio_document_renderer_tests
       tests/document_renderer_tests.cpp
