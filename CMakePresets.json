@@ -1,0 +1,46 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "core",
+      "displayName": "Core library and tests",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/core",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "QIMAGEMAX_BUILD_APP": "OFF",
+        "QIMAGEMAX_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "desktop",
+      "displayName": "Qt desktop app",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/desktop",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "QIMAGEMAX_BUILD_APP": "ON",
+        "QIMAGEMAX_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "core",
+      "configurePreset": "core"
+    },
+    {
+      "name": "desktop",
+      "configurePreset": "desktop"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "core",
+      "configurePreset": "core",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}
