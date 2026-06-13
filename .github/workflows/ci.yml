@@ -39,6 +39,25 @@ jobs:
       - name: Test desktop
         run: ctest --test-dir build/desktop --output-on-failure --timeout 60
 
+      - name: Package unsigned app
+        run: |
+          mkdir -p dist/qco-studio-macos-unsigned
+          "$(brew --prefix qtbase)/bin/macdeployqt" "build/desktop/QCO Studio.app" -always-overwrite
+          cp -R "build/desktop/QCO Studio.app" dist/qco-studio-macos-unsigned/
+          {
+            echo "QCO Studio unsigned macOS build"
+            echo "Commit: $GITHUB_SHA"
+            echo "This package is not code signed or notarized."
+          } > dist/qco-studio-macos-unsigned/README.txt
+          ditto -c -k --sequesterRsrc --keepParent dist/qco-studio-macos-unsigned dist/QCO-Studio-macos-unsigned.zip
+
+      - name: Upload unsigned app package
+        uses: actions/upload-artifact@v4
+        with:
+          name: QCO-Studio-macos-unsigned
+          path: dist/QCO-Studio-macos-unsigned.zip
+          if-no-files-found: error
+
   linux:
     name: Linux Qt build and tests
     runs-on: ubuntu-latest
@@ -89,6 +108,25 @@ jobs:
       - name: Test desktop
         run: ctest --test-dir build/desktop --output-on-failure --timeout 60
 
+      - name: Package unsigned app
+        run: |
+          mkdir -p dist/qco-studio-linux-unsigned
+          cp "build/desktop/QCO Studio" dist/qco-studio-linux-unsigned/
+          chmod +x "dist/qco-studio-linux-unsigned/QCO Studio"
+          {
+            echo "QCO Studio unsigned Linux build"
+            echo "Commit: $GITHUB_SHA"
+            echo "This package is not code signed and expects compatible system Qt/runtime libraries."
+          } > dist/qco-studio-linux-unsigned/README.txt
+          tar -czf dist/QCO-Studio-linux-unsigned.tar.gz -C dist qco-studio-linux-unsigned
+
+      - name: Upload unsigned app package
+        uses: actions/upload-artifact@v4
+        with:
+          name: QCO-Studio-linux-unsigned
+          path: dist/QCO-Studio-linux-unsigned.tar.gz
+          if-no-files-found: error
+
   windows:
     name: Windows Qt build and tests
     runs-on: windows-latest
@@ -132,3 +170,24 @@ jobs:
       - name: Test desktop
         shell: pwsh
         run: ctest --test-dir build/desktop-windows -C Debug --output-on-failure --timeout 60
+
+      - name: Package unsigned app
+        shell: pwsh
+        run: |
+          $packageDir = "dist\QCO-Studio-windows-unsigned"
+          New-Item -ItemType Directory -Force $packageDir | Out-Null
+          Copy-Item "build\desktop-windows\Debug\QCO Studio.exe" $packageDir
+          windeployqt --no-translations "$packageDir\QCO Studio.exe"
+          @(
+            "QCO Studio unsigned Windows build",
+            "Commit: $env:GITHUB_SHA",
+            "This package is not code signed."
+          ) | Out-File -Encoding utf8 "$packageDir\README.txt"
+          Compress-Archive -Path "$packageDir\*" -DestinationPath "dist\QCO-Studio-windows-unsigned.zip" -Force
+
+      - name: Upload unsigned app package
+        uses: actions/upload-artifact@v4
+        with:
+          name: QCO-Studio-windows-unsigned
+          path: dist/QCO-Studio-windows-unsigned.zip
+          if-no-files-found: error

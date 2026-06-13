@@ -51,6 +51,7 @@ cmake --build --preset desktop
 
 The local machine has CMake, Git, and Homebrew `qtbase` installed. Both the core-only target and the Qt desktop target have been configured, built, and tested locally.
 GitHub Actions runs macOS, Linux, and Windows CI.
+Desktop CI uploads unsigned macOS, Linux, and Windows app packages as workflow artifacts.
 
 ## Project Notes
 
