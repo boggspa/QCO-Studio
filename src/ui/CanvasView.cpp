@@ -75,6 +75,21 @@ std::uint64_t CanvasView::selectedLayerId() const noexcept
   return selectedLayerId_;
 }
 
+void CanvasView::setActiveTool(Tool tool)
+{
+  if (activeTool_ == tool) {
+    return;
+  }
+
+  activeTool_ = tool;
+  unsetCursor();
+}
+
+CanvasView::Tool CanvasView::activeTool() const noexcept
+{
+  return activeTool_;
+}
+
 void CanvasView::setZoom(qreal zoom)
 {
   const auto nextZoom = clampedZoom(zoom);
@@ -212,23 +227,42 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
 
   if (event->button() == Qt::LeftButton) {
     const auto documentPoint = widgetToDocument(event->position());
-    const auto id = layerAt(documentPoint);
-    setSelectedLayerId(id);
-    emit layerSelected(id);
+    const QPoint roundedDocumentPoint(qRound(documentPoint.x()), qRound(documentPoint.y()));
 
-    if (id != 0) {
-      const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const LayerImage& layer) {
-        return layer.id == id;
-      });
-      if (it != layers_.end()) {
-        movingLayer_ = true;
-        moveStartPosition_ = it->position;
-        moveLastPosition_ = it->position;
-        moveOffset_ = documentPoint - QPointF(it->position);
-        setCursor(Qt::SizeAllCursor);
-        emit layerMoveStarted(id);
-        event->accept();
-        return;
+    if (activeTool_ == Tool::Brush || activeTool_ == Tool::Eraser) {
+      drawingStroke_ = true;
+      lastStrokePoint_ = roundedDocumentPoint;
+      emit rasterStrokeStarted(activeTool_, roundedDocumentPoint);
+      emit rasterStrokePreview(activeTool_, roundedDocumentPoint, roundedDocumentPoint);
+      event->accept();
+      return;
+    }
+
+    if (activeTool_ == Tool::Fill || activeTool_ == Tool::Text || activeTool_ == Tool::Shape || activeTool_ == Tool::Crop) {
+      emit toolDocumentClicked(activeTool_, roundedDocumentPoint);
+      event->accept();
+      return;
+    }
+
+    if (activeTool_ == Tool::Move || activeTool_ == Tool::Select || activeTool_ == Tool::Pick) {
+      const auto id = layerAt(documentPoint);
+      setSelectedLayerId(id);
+      emit layerSelected(id);
+
+      if (activeTool_ == Tool::Move && id != 0) {
+        const auto it = std::find_if(layers_.begin(), layers_.end(), [id](const LayerImage& layer) {
+          return layer.id == id;
+        });
+        if (it != layers_.end()) {
+          movingLayer_ = true;
+          moveStartPosition_ = it->position;
+          moveLastPosition_ = it->position;
+          moveOffset_ = documentPoint - QPointF(it->position);
+          setCursor(Qt::SizeAllCursor);
+          emit layerMoveStarted(id);
+          event->accept();
+          return;
+        }
       }
     }
   }
@@ -238,6 +272,17 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
 
 void CanvasView::mouseMoveEvent(QMouseEvent* event)
 {
+  if (drawingStroke_) {
+    const auto documentPoint = widgetToDocument(event->position());
+    const QPoint roundedDocumentPoint(qRound(documentPoint.x()), qRound(documentPoint.y()));
+    if (roundedDocumentPoint != lastStrokePoint_) {
+      emit rasterStrokePreview(activeTool_, lastStrokePoint_, roundedDocumentPoint);
+      lastStrokePoint_ = roundedDocumentPoint;
+    }
+    event->accept();
+    return;
+  }
+
   if (movingLayer_ && selectedLayerId_ != 0) {
     const auto documentPoint = widgetToDocument(event->position());
     const QPoint nextPosition(
@@ -266,6 +311,13 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
 
 void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 {
+  if (drawingStroke_ && event->button() == Qt::LeftButton) {
+    drawingStroke_ = false;
+    emit rasterStrokeCommitted(activeTool_);
+    event->accept();
+    return;
+  }
+
   if (movingLayer_ && event->button() == Qt::LeftButton) {
     movingLayer_ = false;
     unsetCursor();

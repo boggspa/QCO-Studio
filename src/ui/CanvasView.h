@@ -16,6 +16,20 @@ class CanvasView final : public QWidget {
   Q_OBJECT
 
 public:
+  enum class Tool {
+    Move,
+    Select,
+    Crop,
+    Brush,
+    Eraser,
+    Fill,
+    Text,
+    Shape,
+    Pen,
+    Pick
+  };
+  Q_ENUM(Tool)
+
   struct LayerImage {
     std::uint64_t id = 0;
     QString name;
@@ -36,6 +50,9 @@ public:
   void setSelectedLayerId(std::uint64_t id);
   [[nodiscard]] std::uint64_t selectedLayerId() const noexcept;
 
+  void setActiveTool(Tool tool);
+  [[nodiscard]] Tool activeTool() const noexcept;
+
   void setZoom(qreal zoom);
   [[nodiscard]] qreal zoom() const noexcept;
 
@@ -48,6 +65,10 @@ signals:
   void layerMoveStarted(std::uint64_t id);
   void layerMovePreview(std::uint64_t id, QPoint position);
   void layerMoveCommitted(std::uint64_t id, QPoint oldPosition, QPoint newPosition);
+  void rasterStrokeStarted(Tool tool, QPoint documentPoint);
+  void rasterStrokePreview(Tool tool, QPoint fromDocumentPoint, QPoint toDocumentPoint);
+  void rasterStrokeCommitted(Tool tool);
+  void toolDocumentClicked(Tool tool, QPoint documentPoint);
 
 protected:
   void paintEvent(QPaintEvent* event) override;
@@ -66,13 +87,16 @@ private:
   QSize documentSize_ = QSize(1280, 800);
   QVector<LayerImage> layers_;
   std::uint64_t selectedLayerId_ = 0;
+  Tool activeTool_ = Tool::Move;
   qreal zoom_ = 1.0;
   QPointF pan_;
   bool panning_ = false;
   bool movingLayer_ = false;
+  bool drawingStroke_ = false;
   QPoint moveStartPosition_;
   QPoint moveLastPosition_;
   QPointF moveOffset_;
+  QPoint lastStrokePoint_;
   QPoint lastMousePosition_;
 };
 

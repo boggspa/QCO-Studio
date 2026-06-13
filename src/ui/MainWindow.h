@@ -6,12 +6,14 @@
 #include "ui/ProjectArchive.h"
 
 #include <QMainWindow>
+#include <QRect>
 #include <QSettings>
 
 #include <memory>
 #include <optional>
 
 class QAction;
+class QActionGroup;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
@@ -47,6 +49,11 @@ private slots:
   void beginCanvasLayerMove(std::uint64_t id);
   void previewCanvasLayerMove(std::uint64_t id, QPoint position);
   void commitCanvasLayerMove(std::uint64_t id, QPoint oldPosition, QPoint newPosition);
+  void setToolFromAction(QAction* action);
+  void beginRasterStroke(CanvasView::Tool tool, QPoint documentPoint);
+  void previewRasterStroke(CanvasView::Tool tool, QPoint fromDocumentPoint, QPoint toDocumentPoint);
+  void commitRasterStroke(CanvasView::Tool tool);
+  void handleToolDocumentClick(CanvasView::Tool tool, QPoint documentPoint);
   void fitCanvasToView();
   void setCanvasToActualSize();
   void undo();
@@ -79,6 +86,11 @@ private:
   void setDirty(bool dirty);
   void setSelectedLayerId(std::uint64_t id);
   void syncCanvasLayers();
+  void applyStrokeToSelectedLayer(CanvasView::Tool tool, QPoint fromDocumentPoint, QPoint toDocumentPoint);
+  void fillSelectedLayerAt(QPoint documentPoint);
+  void addTextLayerAt(QPoint documentPoint);
+  void addShapeLayerAt(QPoint documentPoint);
+  void cropToSelectedLayer();
   void rememberDirectory(const QString& filePath);
 
   [[nodiscard]] bool maybeSaveChanges();
@@ -88,6 +100,7 @@ private:
   [[nodiscard]] const qco::core::Layer* selectedLayer() const noexcept;
   [[nodiscard]] CanvasView::LayerImage* selectedLayerImage() noexcept;
   [[nodiscard]] const CanvasView::LayerImage* selectedLayerImage() const noexcept;
+  [[nodiscard]] QRect selectedLayerDocumentRect() const;
   [[nodiscard]] QString lastDirectory() const;
   [[nodiscard]] QString documentTitle() const;
   [[nodiscard]] QString withDefaultSuffix(QString filePath, const QString& suffix) const;
@@ -100,6 +113,7 @@ private:
   QListWidget* historyList_ = nullptr;
   QLabel* zoomLabel_ = nullptr;
   QSlider* opacitySlider_ = nullptr;
+  QActionGroup* toolActionGroup_ = nullptr;
   QPushButton* addLayerButton_ = nullptr;
   QPushButton* duplicateLayerButton_ = nullptr;
   QPushButton* renameLayerButton_ = nullptr;
@@ -126,6 +140,7 @@ private:
   qco::core::UndoStack undoStack_;
   std::uint64_t selectedLayerId_ = 0;
   std::optional<DocumentState> pendingMoveBeforeState_;
+  std::optional<DocumentState> pendingRasterEditBeforeState_;
   QString currentProjectPath_;
   QSettings settings_;
   bool dirty_ = false;

@@ -11,6 +11,7 @@ This repository is currently Phase 1. The app skeleton includes:
 - Native `.qco` project package skeleton saved as a ZIP-compatible archive.
 - Native `.qco` project reopen for Phase 1 raster-layer packages.
 - Basic raster layer add, duplicate, rename, reorder, visibility, opacity, and canvas move controls.
+- Initial editing tools: brush, eraser, flood fill, crop-to-layer, raster-backed text layer, and raster-backed shape layer.
 - Core document/layer model and command undo stack.
 - Core, archive round-trip, and canvas smoke tests.
 
@@ -49,6 +50,7 @@ cmake --build --preset desktop
 ## Current Dependency Reality
 
 The local machine has CMake, Git, and Homebrew `qtbase` installed. Both the core-only target and the Qt desktop target have been configured, built, and tested locally.
+GitHub Actions runs macOS, Linux, and Windows CI.
 
 ## Project Notes
 

@@ -17,7 +17,7 @@
 
 ## V1 Spine
 
-- Add basic brush, eraser, fill, crop, text, and shape tools.
+- Expand the initial brush, eraser, fill, crop, text, and shape tools into production-quality tool options.
 - Add native project reopen tests for text/vector payloads as they land.
 - Keep destructive operations explicit and undoable.
 
@@ -32,3 +32,4 @@
 - Maintain labels for `phase-1`, `v1`, `rendering`, `layers`, `tools`, `file-format`, and `ui`.
 - Track milestones in GitHub issues/projects.
 - Protect `main` and use pull requests once the initial infrastructure commit is pushed.
+- Finish creating the GitHub Projects board after refreshing GitHub CLI auth with `project` and `read:project` scopes.

@@ -5,6 +5,7 @@
 
 #include <QAction>
 #include <QAbstractItemView>
+#include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDialog>
@@ -13,6 +14,8 @@
 #include <QDockWidget>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFont>
+#include <QFontMetrics>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QImageReader>
@@ -25,6 +28,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSlider>
@@ -37,6 +41,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace qco::ui {
 namespace {
@@ -99,6 +104,10 @@ MainWindow::MainWindow(QWidget* parent)
   connect(canvas_, &CanvasView::layerMoveStarted, this, &MainWindow::beginCanvasLayerMove);
   connect(canvas_, &CanvasView::layerMovePreview, this, &MainWindow::previewCanvasLayerMove);
   connect(canvas_, &CanvasView::layerMoveCommitted, this, &MainWindow::commitCanvasLayerMove);
+  connect(canvas_, &CanvasView::rasterStrokeStarted, this, &MainWindow::beginRasterStroke);
+  connect(canvas_, &CanvasView::rasterStrokePreview, this, &MainWindow::previewRasterStroke);
+  connect(canvas_, &CanvasView::rasterStrokeCommitted, this, &MainWindow::commitRasterStroke);
+  connect(canvas_, &CanvasView::toolDocumentClicked, this, &MainWindow::handleToolDocumentClick);
 
   restoreGeometry(settings_.value(QStringLiteral("window/geometry")).toByteArray());
   restoreState(settings_.value(QStringLiteral("window/state")).toByteArray());
@@ -605,6 +614,81 @@ void MainWindow::commitCanvasLayerMove(std::uint64_t id, QPoint oldPosition, QPo
   pushStateCommand(tr("Move Layer"), std::move(before), captureState());
 }
 
+void MainWindow::setToolFromAction(QAction* action)
+{
+  if (action == nullptr) {
+    return;
+  }
+
+  const auto toolValue = action->data().toInt();
+  const auto tool = static_cast<CanvasView::Tool>(toolValue);
+  canvas_->setActiveTool(tool);
+  statusBar()->showMessage(tr("%1 tool").arg(action->text()), 2000);
+
+  if (tool == CanvasView::Tool::Crop) {
+    cropToSelectedLayer();
+  }
+}
+
+void MainWindow::beginRasterStroke(CanvasView::Tool tool, QPoint documentPoint)
+{
+  Q_UNUSED(documentPoint);
+  if (tool != CanvasView::Tool::Brush && tool != CanvasView::Tool::Eraser) {
+    pendingRasterEditBeforeState_.reset();
+    return;
+  }
+
+  if (selectedLayerImage() == nullptr) {
+    statusBar()->showMessage(tr("Select or add a raster layer first"), 3000);
+    pendingRasterEditBeforeState_.reset();
+    return;
+  }
+
+  pendingRasterEditBeforeState_ = captureState();
+}
+
+void MainWindow::previewRasterStroke(CanvasView::Tool tool, QPoint fromDocumentPoint, QPoint toDocumentPoint)
+{
+  if (!pendingRasterEditBeforeState_.has_value()) {
+    return;
+  }
+
+  applyStrokeToSelectedLayer(tool, fromDocumentPoint, toDocumentPoint);
+}
+
+void MainWindow::commitRasterStroke(CanvasView::Tool tool)
+{
+  if (!pendingRasterEditBeforeState_.has_value()) {
+    return;
+  }
+
+  auto before = std::move(*pendingRasterEditBeforeState_);
+  pendingRasterEditBeforeState_.reset();
+  pushStateCommand(tool == CanvasView::Tool::Eraser ? tr("Erase Stroke") : tr("Brush Stroke"),
+                   std::move(before),
+                   captureState());
+}
+
+void MainWindow::handleToolDocumentClick(CanvasView::Tool tool, QPoint documentPoint)
+{
+  switch (tool) {
+    case CanvasView::Tool::Fill:
+      fillSelectedLayerAt(documentPoint);
+      break;
+    case CanvasView::Tool::Text:
+      addTextLayerAt(documentPoint);
+      break;
+    case CanvasView::Tool::Shape:
+      addShapeLayerAt(documentPoint);
+      break;
+    case CanvasView::Tool::Crop:
+      cropToSelectedLayer();
+      break;
+    default:
+      break;
+  }
+}
+
 void MainWindow::fitCanvasToView()
 {
   canvas_->fitToView();
@@ -734,28 +818,31 @@ void MainWindow::createToolRail()
   toolRail->setIconSize(QSize(20, 20));
   addToolBar(Qt::LeftToolBarArea, toolRail);
 
-  const QStringList tools = {
-    tr("Move"),
-    tr("Select"),
-    tr("Crop"),
-    tr("Brush"),
-    tr("Erase"),
-    tr("Fill"),
-    tr("Text"),
-    tr("Shape"),
-    tr("Pen"),
-    tr("Pick")
-  };
+  toolActionGroup_ = new QActionGroup(this);
+  toolActionGroup_->setExclusive(true);
+  connect(toolActionGroup_, &QActionGroup::triggered, this, &MainWindow::setToolFromAction);
 
-  for (const auto& toolName : tools) {
+  const auto addTool = [this, toolRail](const QString& toolName, CanvasView::Tool tool) {
     auto* action = toolRail->addAction(toolName);
     action->setCheckable(true);
     action->setToolTip(toolName);
-  }
+    action->setData(static_cast<int>(tool));
+    toolActionGroup_->addAction(action);
+    return action;
+  };
 
-  if (!toolRail->actions().isEmpty()) {
-    toolRail->actions().first()->setChecked(true);
-  }
+  auto* moveAction = addTool(tr("Move"), CanvasView::Tool::Move);
+  addTool(tr("Select"), CanvasView::Tool::Select);
+  addTool(tr("Crop"), CanvasView::Tool::Crop);
+  addTool(tr("Brush"), CanvasView::Tool::Brush);
+  addTool(tr("Erase"), CanvasView::Tool::Eraser);
+  addTool(tr("Fill"), CanvasView::Tool::Fill);
+  addTool(tr("Text"), CanvasView::Tool::Text);
+  addTool(tr("Shape"), CanvasView::Tool::Shape);
+  addTool(tr("Pen"), CanvasView::Tool::Pen);
+  addTool(tr("Pick"), CanvasView::Tool::Pick);
+  moveAction->setChecked(true);
+  canvas_->setActiveTool(CanvasView::Tool::Move);
 }
 
 void MainWindow::createPanels()
@@ -1013,6 +1100,206 @@ void MainWindow::syncCanvasLayers()
   canvas_->setLayers(layers_);
 }
 
+void MainWindow::applyStrokeToSelectedLayer(CanvasView::Tool tool, QPoint fromDocumentPoint, QPoint toDocumentPoint)
+{
+  auto* imageLayer = selectedLayerImage();
+  if (imageLayer == nullptr || imageLayer->image.isNull()) {
+    return;
+  }
+
+  const QPoint from = fromDocumentPoint - imageLayer->position;
+  const QPoint to = toDocumentPoint - imageLayer->position;
+  QRect imageRect(QPoint(0, 0), imageLayer->image.size());
+  if (!imageRect.adjusted(-32, -32, 32, 32).contains(from) && !imageRect.adjusted(-32, -32, 32, 32).contains(to)) {
+    return;
+  }
+
+  QPainter painter(&imageLayer->image);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  if (tool == CanvasView::Tool::Eraser) {
+    painter.setCompositionMode(QPainter::CompositionMode_Clear);
+  }
+
+  QPen pen(tool == CanvasView::Tool::Eraser ? QColor(0, 0, 0, 255) : QColor(24, 24, 24, 255));
+  pen.setWidth(24);
+  pen.setCapStyle(Qt::RoundCap);
+  pen.setJoinStyle(Qt::RoundJoin);
+  painter.setPen(pen);
+  painter.drawLine(from, to);
+  painter.end();
+
+  syncCanvasLayers();
+  updatePropertiesPanel();
+}
+
+void MainWindow::fillSelectedLayerAt(QPoint documentPoint)
+{
+  auto* imageLayer = selectedLayerImage();
+  if (imageLayer == nullptr || imageLayer->image.isNull()) {
+    statusBar()->showMessage(tr("Select or add a raster layer first"), 3000);
+    return;
+  }
+
+  const QPoint localPoint = documentPoint - imageLayer->position;
+  QRect imageRect(QPoint(0, 0), imageLayer->image.size());
+  if (!imageRect.contains(localPoint)) {
+    statusBar()->showMessage(tr("Click inside the selected layer to fill"), 3000);
+    return;
+  }
+
+  const auto before = captureState();
+  QImage& image = imageLayer->image;
+  const QRgb target = image.pixel(localPoint);
+  const QColor fillColor(24, 24, 24, 255);
+  if (target == fillColor.rgba()) {
+    return;
+  }
+
+  QVector<QPoint> stack;
+  stack.reserve(image.width() * image.height() / 8);
+  stack.push_back(localPoint);
+
+  while (!stack.isEmpty()) {
+    const QPoint point = stack.takeLast();
+    if (!imageRect.contains(point) || image.pixel(point) != target) {
+      continue;
+    }
+
+    image.setPixelColor(point, fillColor);
+    stack.push_back(QPoint(point.x() + 1, point.y()));
+    stack.push_back(QPoint(point.x() - 1, point.y()));
+    stack.push_back(QPoint(point.x(), point.y() + 1));
+    stack.push_back(QPoint(point.x(), point.y() - 1));
+  }
+
+  pushStateCommand(tr("Fill Layer Region"), before, captureState());
+}
+
+void MainWindow::addTextLayerAt(QPoint documentPoint)
+{
+  if (!document_) {
+    return;
+  }
+
+  bool ok = false;
+  const auto text = QInputDialog::getText(
+    this,
+    tr("Add Text"),
+    tr("Text"),
+    QLineEdit::Normal,
+    tr("Text"),
+    &ok);
+
+  if (!ok || text.trimmed().isEmpty()) {
+    return;
+  }
+
+  auto before = captureState();
+  QFont font;
+  font.setPointSize(48);
+  font.setBold(false);
+  const QFontMetrics metrics(font);
+  const QRect textBounds = metrics.boundingRect(text).adjusted(-8, -8, 8, 8);
+
+  QImage image(textBounds.size(), QImage::Format_ARGB32_Premultiplied);
+  image.fill(Qt::transparent);
+
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  painter.setFont(font);
+  painter.setPen(QColor(24, 24, 24, 255));
+  painter.drawText(QPoint(8, 8 + metrics.ascent()), text);
+  painter.end();
+
+  const auto layerId = document_->addLayer(
+    text.toStdString(),
+    qco::core::LayerType::Text,
+    toCoreSize(image.size()),
+    toCorePoint(documentPoint));
+
+  CanvasView::LayerImage layer;
+  layer.id = layerId;
+  layer.name = text;
+  layer.image = image;
+  layer.position = documentPoint;
+  layers_.push_back(std::move(layer));
+  selectedLayerId_ = layerId;
+
+  pushStateCommand(tr("Add Text Layer"), std::move(before), captureState());
+}
+
+void MainWindow::addShapeLayerAt(QPoint documentPoint)
+{
+  if (!document_) {
+    return;
+  }
+
+  const QStringList shapes = {tr("Rectangle"), tr("Ellipse")};
+  bool ok = false;
+  const auto shape = QInputDialog::getItem(this, tr("Add Shape"), tr("Shape"), shapes, 0, false, &ok);
+  if (!ok || shape.isEmpty()) {
+    return;
+  }
+
+  auto before = captureState();
+  QImage image(QSize(240, 160), QImage::Format_ARGB32_Premultiplied);
+  image.fill(Qt::transparent);
+
+  QPainter painter(&image);
+  painter.setRenderHint(QPainter::Antialiasing, true);
+  painter.setPen(QPen(QColor(24, 24, 24, 255), 4));
+  painter.setBrush(QColor(45, 156, 219, 120));
+  const QRectF bounds(8, 8, image.width() - 16, image.height() - 16);
+  if (shape == tr("Ellipse")) {
+    painter.drawEllipse(bounds);
+  } else {
+    painter.drawRect(bounds);
+  }
+  painter.end();
+
+  const auto layerId = document_->addLayer(
+    shape.toStdString(),
+    qco::core::LayerType::Shape,
+    toCoreSize(image.size()),
+    toCorePoint(documentPoint));
+
+  CanvasView::LayerImage layer;
+  layer.id = layerId;
+  layer.name = shape;
+  layer.image = image;
+  layer.position = documentPoint;
+  layers_.push_back(std::move(layer));
+  selectedLayerId_ = layerId;
+
+  pushStateCommand(tr("Add Shape Layer"), std::move(before), captureState());
+}
+
+void MainWindow::cropToSelectedLayer()
+{
+  if (!document_) {
+    return;
+  }
+
+  const QRect cropRect = selectedLayerDocumentRect().intersected(QRect(QPoint(0, 0), toQtSize(document_->canvasSize())));
+  if (!cropRect.isValid() || cropRect.isEmpty()) {
+    statusBar()->showMessage(tr("Select a visible layer to crop to"), 3000);
+    return;
+  }
+
+  auto before = captureState();
+  document_->resizeCanvas(toCoreSize(cropRect.size()));
+
+  for (const auto& layer : document_->layers()) {
+    (void)document_->setLayerPosition(layer.id, {layer.position.x - cropRect.x(), layer.position.y - cropRect.y()});
+  }
+
+  for (auto& imageLayer : layers_) {
+    imageLayer.position -= cropRect.topLeft();
+  }
+
+  pushStateCommand(tr("Crop Canvas"), std::move(before), captureState());
+}
+
 void MainWindow::rememberDirectory(const QString& filePath)
 {
   settings_.setValue(QStringLiteral("files/lastDirectory"), QFileInfo(filePath).absolutePath());
@@ -1082,6 +1369,16 @@ const CanvasView::LayerImage* MainWindow::selectedLayerImage() const noexcept
     return layer.id == id;
   });
   return it == layers_.end() ? nullptr : &(*it);
+}
+
+QRect MainWindow::selectedLayerDocumentRect() const
+{
+  const auto* imageLayer = selectedLayerImage();
+  if (imageLayer == nullptr || imageLayer->image.isNull()) {
+    return {};
+  }
+
+  return QRect(imageLayer->position, imageLayer->image.size());
 }
 
 QString MainWindow::lastDirectory() const
