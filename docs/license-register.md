@@ -12,7 +12,7 @@ This register tracks intended and active dependencies. Do not add a runtime depe
 | OpenImageIO | Deferred, license-reviewed | Professional image import/export | Apache-2.0 for original code; compatible third-party code; docs CC-BY-4.0 | Previous BSD-only assumption is stale. Review bundled codecs and notices before packaging. |
 | OpenColorIO | Deferred, license-reviewed | Color pipeline | BSD-3-Clause | Suitable candidate for view/display transforms after color test assets are selected. |
 | LittleCMS | Deferred, license-reviewed | ICC profile handling | MIT | Suitable candidate for ICC transforms. Include attribution notice before signed distribution. |
-| LibRaw | Deferred, license-reviewed | RAW decoding | LGPL-2.1 or CDDL-1.0 choice | Keep behind optional RAW provider boundary until linking and notice strategy is decided. |
+| LibRaw | Boundary active, runtime dependency deferred | RAW decoding | LGPL-2.1 or CDDL-1.0 choice | `RawImageProvider` is in place; keep LibRaw optional until linking and notice strategy is decided. |
 | Exiv2 | Deferred, blocked by license risk | EXIF/IPTC/XMP metadata | GPL-2.0-or-later | Do not link by default unless product license strategy changes or legal clearance is obtained. Evaluate alternatives first. |
 | Adobe XMP Toolkit SDK | Deferred, candidate | XMP metadata | BSD-3-Clause | Candidate for XMP support; not a complete EXIF/IPTC replacement. |
 | libexif | Deferred, candidate | EXIF metadata | LGPL-2.1-family signal | Candidate for EXIF-only support if linking/notices fit distribution strategy. |

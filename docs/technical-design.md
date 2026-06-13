@@ -79,6 +79,8 @@ Image import and export now go through `src/image/ImageCodec` with a Qt-backed c
 
 Color profile tagging and conversion now go through `src/image/ColorTransform` with a Qt-backed implementation. OpenColorIO and LittleCMS should replace or augment that transform boundary rather than being called directly from UI or export code.
 
+Camera RAW import now has a `src/image/RawImageProvider` boundary with deterministic RAW suffix/filter detection and an explicit LibRaw handoff error in the default build. A future LibRaw-backed provider should implement this interface and populate decoded pixels plus sidecar/document metadata without exposing LibRaw to UI code.
+
 ## 8. Layer Model Architecture
 
 Layers have stable ids, names, type, visibility, lock state, opacity, blend mode, bounds, and type-specific payload references. The core model owns ordering and metadata; renderer/image modules own pixel payloads. Groups and masks should be explicit graph relationships rather than hidden UI-only nesting.
