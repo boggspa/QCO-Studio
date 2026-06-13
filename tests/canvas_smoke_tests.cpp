@@ -4,7 +4,28 @@
 #include <QColor>
 #include <QImage>
 
-#include <cassert>
+#include <iostream>
+
+namespace {
+
+bool check(bool condition, const char* expression, const char* file, int line)
+{
+  if (condition) {
+    return true;
+  }
+
+  std::cerr << file << ':' << line << ": check failed: " << expression << '\n';
+  return false;
+}
+
+}  // namespace
+
+#define CHECK(condition) \
+  do { \
+    if (!check((condition), #condition, __FILE__, __LINE__)) { \
+      return 1; \
+    } \
+  } while (false)
 
 int main(int argc, char** argv)
 {
@@ -31,9 +52,9 @@ int main(int argc, char** argv)
   canvas.setLayers(layers);
 
   const auto composite = canvas.renderComposite(Qt::transparent);
-  assert(composite.size() == QSize(8, 8));
-  assert(composite.pixelColor(0, 0).alpha() == 0);
-  assert(composite.pixelColor(2, 2) == QColor(0, 128, 255, 255));
+  CHECK(composite.size() == QSize(8, 8));
+  CHECK(composite.pixelColor(0, 0).alpha() == 0);
+  CHECK(composite.pixelColor(2, 2) == QColor(0, 128, 255, 255));
 
   return 0;
 }

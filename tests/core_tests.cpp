@@ -1,36 +1,46 @@
 #include "core/Document.h"
 #include "core/UndoStack.h"
 
-#include <cassert>
+#include <iostream>
 #include <memory>
 
 namespace {
 
-void documentKeepsLayerOrder()
+#define CHECK(condition) \
+  do { \
+    if (!(condition)) { \
+      std::cerr << __FILE__ << ':' << __LINE__ << ": check failed: " << #condition << '\n'; \
+      return false; \
+    } \
+  } while (false)
+
+bool documentKeepsLayerOrder()
 {
   auto document = qco::core::Document::create("Test", {800, 600});
   const auto background = document.addLayer("Background", qco::core::LayerType::Raster, {800, 600});
   const auto paint = document.addLayer("Paint", qco::core::LayerType::Raster, {800, 600});
 
-  assert(document.layers().size() == 2);
-  assert(document.layers()[0].id == background);
-  assert(document.layers()[1].id == paint);
+  CHECK(document.layers().size() == 2);
+  CHECK(document.layers()[0].id == background);
+  CHECK(document.layers()[1].id == paint);
 
   const auto moved = document.moveLayer(background, 1);
-  assert(moved);
-  assert(document.layers()[0].id == paint);
-  assert(document.layers()[1].id == background);
+  CHECK(moved);
+  CHECK(document.layers()[0].id == paint);
+  CHECK(document.layers()[1].id == background);
+  return true;
 }
 
-void documentRejectsInvalidCanvasResize()
+bool documentRejectsInvalidCanvasResize()
 {
   auto document = qco::core::Document::create("Test", {320, 240});
   document.resizeCanvas({0, 0});
-  assert(document.canvasSize().width == 320);
-  assert(document.canvasSize().height == 240);
+  CHECK(document.canvasSize().width == 320);
+  CHECK(document.canvasSize().height == 240);
+  return true;
 }
 
-void documentPreservesExplicitLayerMetadata()
+bool documentPreservesExplicitLayerMetadata()
 {
   auto document = qco::core::Document::create("Test", {320, 240});
 
@@ -43,26 +53,27 @@ void documentPreservesExplicitLayerMetadata()
   layer.visible = false;
   layer.opacity = 0.4;
 
-  assert(document.addLayer(layer));
-  assert(document.addLayer(layer) == false);
-  assert(document.setLayerVisibility(42, true));
-  assert(document.setLayerOpacity(42, 1.5));
-  assert(document.setLayerPosition(42, {9, 10}));
-  assert(document.setLayerName(42, "Renamed"));
+  CHECK(document.addLayer(layer));
+  CHECK(document.addLayer(layer) == false);
+  CHECK(document.setLayerVisibility(42, true));
+  CHECK(document.setLayerOpacity(42, 1.5));
+  CHECK(document.setLayerPosition(42, {9, 10}));
+  CHECK(document.setLayerName(42, "Renamed"));
 
   const auto* imported = document.findLayer(42);
-  assert(imported != nullptr);
-  assert(imported->name == "Renamed");
-  assert(imported->visible);
-  assert(imported->opacity == 1.0);
-  assert(imported->position.x == 9);
-  assert(imported->position.y == 10);
+  CHECK(imported != nullptr);
+  CHECK(imported->name == "Renamed");
+  CHECK(imported->visible);
+  CHECK(imported->opacity == 1.0);
+  CHECK(imported->position.x == 9);
+  CHECK(imported->position.y == 10);
 
   const auto nextId = document.addLayer("Next", qco::core::LayerType::Raster, {1, 1});
-  assert(nextId == 43);
+  CHECK(nextId == 43);
+  return true;
 }
 
-void undoStackDropsRedoBranch()
+bool undoStackDropsRedoBranch()
 {
   int value = 0;
   qco::core::UndoStack stack;
@@ -72,30 +83,31 @@ void undoStackDropsRedoBranch()
     [&value]() { --value; },
     [&value]() { ++value; }));
 
-  assert(value == 1);
-  assert(stack.canUndo());
-  assert(stack.undo());
-  assert(value == 0);
-  assert(stack.canRedo());
+  CHECK(value == 1);
+  CHECK(stack.canUndo());
+  CHECK(stack.undo());
+  CHECK(value == 0);
+  CHECK(stack.canRedo());
 
   stack.push(std::make_unique<qco::core::LambdaCommand>(
     "add ten",
     [&value]() { value -= 10; },
     [&value]() { value += 10; }));
 
-  assert(value == 10);
-  assert(!stack.canRedo());
-  assert(stack.size() == 1);
-  assert(stack.undoText() == "add ten");
+  CHECK(value == 10);
+  CHECK(!stack.canRedo());
+  CHECK(stack.size() == 1);
+  CHECK(stack.undoText() == "add ten");
+  return true;
 }
 
 }  // namespace
 
 int main()
 {
-  documentKeepsLayerOrder();
-  documentRejectsInvalidCanvasResize();
-  documentPreservesExplicitLayerMetadata();
-  undoStackDropsRedoBranch();
+  if (!documentKeepsLayerOrder() || !documentRejectsInvalidCanvasResize() || !documentPreservesExplicitLayerMetadata()
+      || !undoStackDropsRedoBranch()) {
+    return 1;
+  }
   return 0;
 }
