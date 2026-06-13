@@ -9,8 +9,11 @@
 #include <QPoint>
 #include <QTemporaryDir>
 
+#include <array>
 #include <cmath>
+#include <cstring>
 #include <iostream>
+#include <optional>
 
 namespace {
 
@@ -29,6 +32,169 @@ bool check(bool condition, const char* expression, const char* file, int line)
   QImage image(size, QImage::Format_ARGB32_Premultiplied);
   image.fill(color);
   return image;
+}
+
+[[nodiscard]] quint16 readUInt16(const QByteArray& bytes, qsizetype offset)
+{
+  return static_cast<quint16>(static_cast<quint8>(bytes[offset]))
+         | static_cast<quint16>(static_cast<quint8>(bytes[offset + 1]) << 8U);
+}
+
+[[nodiscard]] quint32 readUInt32(const QByteArray& bytes, qsizetype offset)
+{
+  return static_cast<quint32>(static_cast<quint8>(bytes[offset]))
+         | (static_cast<quint32>(static_cast<quint8>(bytes[offset + 1])) << 8U)
+         | (static_cast<quint32>(static_cast<quint8>(bytes[offset + 2])) << 16U)
+         | (static_cast<quint32>(static_cast<quint8>(bytes[offset + 3])) << 24U);
+}
+
+void writeUInt32(QByteArray& bytes, qsizetype offset, quint32 value)
+{
+  bytes[offset] = static_cast<char>(value & 0xFFU);
+  bytes[offset + 1] = static_cast<char>((value >> 8U) & 0xFFU);
+  bytes[offset + 2] = static_cast<char>((value >> 16U) & 0xFFU);
+  bytes[offset + 3] = static_cast<char>((value >> 24U) & 0xFFU);
+}
+
+[[nodiscard]] quint32 crc32(const QByteArray& bytes)
+{
+  static const auto table = [] {
+    std::array<quint32, 256> values{};
+    for (quint32 i = 0; i < values.size(); ++i) {
+      quint32 crc = i;
+      for (int bit = 0; bit < 8; ++bit) {
+        crc = (crc & 1U) ? (0xEDB88320U ^ (crc >> 1U)) : (crc >> 1U);
+      }
+      values[i] = crc;
+    }
+    return values;
+  }();
+
+  quint32 crc = 0xFFFFFFFFU;
+  for (const auto byte : bytes) {
+    crc = table[(crc ^ static_cast<quint8>(byte)) & 0xFFU] ^ (crc >> 8U);
+  }
+  return crc ^ 0xFFFFFFFFU;
+}
+
+[[nodiscard]] bool replaceStoredEntry(QByteArray& archive, const QString& path, const QByteArray& replacement)
+{
+  qsizetype offset = 0;
+  bool localEntryUpdated = false;
+  quint32 replacementCrc = 0;
+
+  while (offset + 30 <= archive.size()) {
+    const auto signature = readUInt32(archive, offset);
+    if (signature == 0x02014B50U || signature == 0x06054B50U) {
+      break;
+    }
+    if (signature != 0x04034B50U) {
+      return false;
+    }
+
+    const auto compressedSize = readUInt32(archive, offset + 18);
+    const auto uncompressedSize = readUInt32(archive, offset + 22);
+    const auto nameLength = readUInt16(archive, offset + 26);
+    const auto extraLength = readUInt16(archive, offset + 28);
+    const auto nameOffset = offset + 30;
+    const auto dataOffset = nameOffset + nameLength + extraLength;
+    const auto nextOffset = dataOffset + static_cast<qsizetype>(compressedSize);
+    if (compressedSize != uncompressedSize || nextOffset > archive.size()) {
+      return false;
+    }
+
+    const auto name = QString::fromUtf8(archive.mid(nameOffset, nameLength));
+    if (name == path) {
+      if (replacement.size() != static_cast<qsizetype>(compressedSize)) {
+        return false;
+      }
+      std::memcpy(archive.data() + dataOffset, replacement.constData(), static_cast<std::size_t>(replacement.size()));
+      replacementCrc = crc32(replacement);
+      writeUInt32(archive, offset + 14, replacementCrc);
+      localEntryUpdated = true;
+    }
+
+    offset = nextOffset;
+  }
+
+  if (!localEntryUpdated) {
+    return false;
+  }
+
+  while (offset + 46 <= archive.size()) {
+    const auto signature = readUInt32(archive, offset);
+    if (signature == 0x06054B50U) {
+      break;
+    }
+    if (signature != 0x02014B50U) {
+      return false;
+    }
+
+    const auto compressedSize = readUInt32(archive, offset + 20);
+    const auto uncompressedSize = readUInt32(archive, offset + 24);
+    const auto nameLength = readUInt16(archive, offset + 28);
+    const auto extraLength = readUInt16(archive, offset + 30);
+    const auto commentLength = readUInt16(archive, offset + 32);
+    const auto nameOffset = offset + 46;
+    const auto nextOffset =
+      nameOffset + nameLength + extraLength + commentLength;
+    if (compressedSize != uncompressedSize || nextOffset > archive.size()) {
+      return false;
+    }
+
+    const auto name = QString::fromUtf8(archive.mid(nameOffset, nameLength));
+    if (name == path) {
+      if (replacement.size() != static_cast<qsizetype>(compressedSize)) {
+        return false;
+      }
+      writeUInt32(archive, offset + 16, replacementCrc);
+      return true;
+    }
+
+    offset = nextOffset;
+  }
+
+  return false;
+}
+
+[[nodiscard]] std::optional<QByteArray> storedEntryData(const QByteArray& archive, const QString& path)
+{
+  qsizetype offset = 0;
+  while (offset + 30 <= archive.size()) {
+    const auto signature = readUInt32(archive, offset);
+    if (signature != 0x04034B50U) {
+      return std::nullopt;
+    }
+
+    const auto compressedSize = readUInt32(archive, offset + 18);
+    const auto uncompressedSize = readUInt32(archive, offset + 22);
+    const auto nameLength = readUInt16(archive, offset + 26);
+    const auto extraLength = readUInt16(archive, offset + 28);
+    const auto nameOffset = offset + 30;
+    const auto dataOffset = nameOffset + nameLength + extraLength;
+    const auto nextOffset = dataOffset + static_cast<qsizetype>(compressedSize);
+    if (compressedSize != uncompressedSize || nextOffset > archive.size()) {
+      return std::nullopt;
+    }
+
+    const auto name = QString::fromUtf8(archive.mid(nameOffset, nameLength));
+    if (name == path) {
+      return archive.mid(dataOffset, static_cast<qsizetype>(compressedSize));
+    }
+
+    offset = nextOffset;
+  }
+
+  return std::nullopt;
+}
+
+[[nodiscard]] bool writeBytes(const QString& filePath, const QByteArray& bytes)
+{
+  QFile file(filePath);
+  if (!file.open(QIODevice::WriteOnly)) {
+    return false;
+  }
+  return file.write(bytes) == bytes.size();
 }
 
 }  // namespace
@@ -178,6 +344,48 @@ int main(int argc, char** argv)
   CHECK(loaded->rasterLayers[2].position == QPoint(30, 20));
   CHECK(std::abs(loaded->rasterLayers[2].opacity - 0.8) < 0.001);
   CHECK(loaded->rasterLayers[2].image.pixelColor(0, 0) == QColor(0, 0, 255, 180));
+
+  const auto manifestBytes = storedEntryData(bytes, QStringLiteral("manifest.json"));
+  CHECK(manifestBytes.has_value());
+  QByteArray futureManifestBytes = *manifestBytes;
+  CHECK(futureManifestBytes.contains("\"formatVersion\": 1"));
+  futureManifestBytes.replace("\"formatVersion\": 1", "\"formatVersion\": 2");
+  QByteArray futureVersionBytes = bytes;
+  CHECK(replaceStoredEntry(futureVersionBytes, QStringLiteral("manifest.json"), futureManifestBytes));
+  const auto futureVersionPath = tempDir.path() + QStringLiteral("/future-version.qco");
+  CHECK(writeBytes(futureVersionPath, futureVersionBytes));
+
+  errorMessage.clear();
+  const auto futureVersion = qco::ui::ProjectArchive::load(futureVersionPath, &errorMessage);
+  CHECK(!futureVersion.has_value());
+  CHECK(errorMessage.contains(QStringLiteral("not supported")));
+
+  const auto documentBytes = storedEntryData(bytes, QStringLiteral("document.json"));
+  CHECK(documentBytes.has_value());
+  QByteArray missingImageDocumentBytes = *documentBytes;
+  const auto originalImagePath = QStringLiteral("layers/%1.png").arg(rasterId).toUtf8();
+  const QByteArray missingImagePath("layers/9.png");
+  CHECK(originalImagePath.size() == missingImagePath.size());
+  CHECK(missingImageDocumentBytes.contains(originalImagePath));
+  missingImageDocumentBytes.replace(originalImagePath, missingImagePath);
+
+  QByteArray missingImageBytes = bytes;
+  CHECK(replaceStoredEntry(missingImageBytes, QStringLiteral("document.json"), missingImageDocumentBytes));
+  const auto missingImagePackagePath = tempDir.path() + QStringLiteral("/missing-image.qco");
+  CHECK(writeBytes(missingImagePackagePath, missingImageBytes));
+
+  errorMessage.clear();
+  const auto missingImagePackage = qco::ui::ProjectArchive::load(missingImagePackagePath, &errorMessage);
+  CHECK(!missingImagePackage.has_value());
+  CHECK(errorMessage.contains(QStringLiteral("missing layer image data")));
+
+  const auto corruptPackagePath = tempDir.path() + QStringLiteral("/corrupt.qco");
+  CHECK(writeBytes(corruptPackagePath, bytes.left(20)));
+
+  errorMessage.clear();
+  const auto corruptPackage = qco::ui::ProjectArchive::load(corruptPackagePath, &errorMessage);
+  CHECK(!corruptPackage.has_value());
+  CHECK(!errorMessage.isEmpty());
 
   return 0;
 }

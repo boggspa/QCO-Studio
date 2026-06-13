@@ -18,6 +18,8 @@
 namespace qco::ui {
 namespace {
 
+constexpr int currentFormatVersion = 1;
+
 struct ZipEntry {
   QString path;
   QByteArray data;
@@ -297,7 +299,7 @@ bool ProjectArchive::save(
 
   QJsonObject manifest;
   manifest.insert(QStringLiteral("format"), QStringLiteral("app.qcostudio.document"));
-  manifest.insert(QStringLiteral("formatVersion"), 1);
+  manifest.insert(QStringLiteral("formatVersion"), currentFormatVersion);
   manifest.insert(QStringLiteral("appVersion"), QCoreApplication::applicationVersion());
   manifest.insert(QStringLiteral("createdAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
   entries.push_back({QStringLiteral("manifest.json"), toJson(manifest)});
@@ -335,8 +337,12 @@ bool ProjectArchive::save(
 
       QByteArray pngBytes;
       QBuffer buffer(&pngBytes);
-      buffer.open(QIODevice::WriteOnly);
-      layerImage->image.save(&buffer, "PNG");
+      if (!buffer.open(QIODevice::WriteOnly) || !layerImage->image.save(&buffer, "PNG")) {
+        if (errorMessage) {
+          *errorMessage = QStringLiteral("A layer image could not be encoded for the project package.");
+        }
+        return false;
+      }
       entries.push_back({imagePath, pngBytes});
     }
 
@@ -366,10 +372,23 @@ std::optional<ProjectDocument> ProjectArchive::load(const QString& filePath, QSt
   }
 
   const auto manifest = QJsonDocument::fromJson(*manifestBytes);
-  if (!manifest.isObject()
-      || manifest.object().value(QStringLiteral("format")).toString() != QStringLiteral("app.qcostudio.document")) {
+  if (!manifest.isObject()) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("The project package manifest is invalid.");
+    }
+    return std::nullopt;
+  }
+
+  const auto manifestObject = manifest.object();
+  if (manifestObject.value(QStringLiteral("format")).toString() != QStringLiteral("app.qcostudio.document")) {
     if (errorMessage) {
       *errorMessage = QStringLiteral("The selected file is not a QCO Studio document.");
+    }
+    return std::nullopt;
+  }
+  if (manifestObject.value(QStringLiteral("formatVersion")).toInt(-1) != currentFormatVersion) {
+    if (errorMessage) {
+      *errorMessage = QStringLiteral("This QCO Studio document version is not supported.");
     }
     return std::nullopt;
   }
