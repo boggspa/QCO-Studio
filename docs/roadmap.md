@@ -17,7 +17,7 @@
 
 ## V1 Spine
 
-- Expand the initial brush, eraser, fill, crop, text, and shape tools into production-quality tool options.
+- Expand the initial brush, eraser, fill, crop, text, and shape tools beyond the current tool options and drag-crop baseline.
 - Add native project reopen tests for text/vector payloads as they land.
 - Keep destructive operations explicit and undoable.
 

@@ -5,6 +5,7 @@
 #include "ui/CanvasView.h"
 #include "ui/ProjectArchive.h"
 
+#include <QColor>
 #include <QMainWindow>
 #include <QRect>
 #include <QSettings>
@@ -14,12 +15,14 @@
 
 class QAction;
 class QActionGroup;
+class QComboBox;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
 class QDockWidget;
 class QPushButton;
 class QSlider;
+class QSpinBox;
 class QCloseEvent;
 
 namespace qco::ui {
@@ -54,6 +57,7 @@ private slots:
   void previewRasterStroke(CanvasView::Tool tool, QPoint fromDocumentPoint, QPoint toDocumentPoint);
   void commitRasterStroke(CanvasView::Tool tool);
   void handleToolDocumentClick(CanvasView::Tool tool, QPoint documentPoint);
+  void cropDocumentToRect(QRect documentRect);
   void fitCanvasToView();
   void setCanvasToActualSize();
   void undo();
@@ -74,6 +78,7 @@ private:
   void createMenus();
   void createToolRail();
   void createPanels();
+  void createToolOptionsPanel();
   void createInitialDocument();
   void setDocument(qco::core::Document document, QVector<CanvasView::LayerImage> layers);
   void applyState(const DocumentState& state);
@@ -91,6 +96,8 @@ private:
   void addTextLayerAt(QPoint documentPoint);
   void addShapeLayerAt(QPoint documentPoint);
   void cropToSelectedLayer();
+  void updateColorButton(QPushButton* button, const QColor& color);
+  void chooseToolColor(const QString& title, QColor& color, QPushButton* button);
   void rememberDirectory(const QString& filePath);
 
   [[nodiscard]] bool maybeSaveChanges();
@@ -113,6 +120,21 @@ private:
   QListWidget* historyList_ = nullptr;
   QLabel* zoomLabel_ = nullptr;
   QSlider* opacitySlider_ = nullptr;
+  QSpinBox* brushSizeInput_ = nullptr;
+  QSpinBox* brushOpacityInput_ = nullptr;
+  QSpinBox* eraserSizeInput_ = nullptr;
+  QSpinBox* fillToleranceInput_ = nullptr;
+  QSpinBox* textSizeInput_ = nullptr;
+  QSpinBox* shapeWidthInput_ = nullptr;
+  QSpinBox* shapeHeightInput_ = nullptr;
+  QSpinBox* shapeStrokeWidthInput_ = nullptr;
+  QComboBox* shapeTypeInput_ = nullptr;
+  QPushButton* brushColorButton_ = nullptr;
+  QPushButton* fillColorButton_ = nullptr;
+  QPushButton* textColorButton_ = nullptr;
+  QPushButton* shapeFillColorButton_ = nullptr;
+  QPushButton* shapeStrokeColorButton_ = nullptr;
+  QPushButton* cropSelectedLayerButton_ = nullptr;
   QActionGroup* toolActionGroup_ = nullptr;
   QPushButton* addLayerButton_ = nullptr;
   QPushButton* duplicateLayerButton_ = nullptr;
@@ -143,6 +165,19 @@ private:
   std::optional<DocumentState> pendingRasterEditBeforeState_;
   QString currentProjectPath_;
   QSettings settings_;
+  QColor brushColor_ = QColor(24, 24, 24, 255);
+  QColor fillColor_ = QColor(24, 24, 24, 255);
+  QColor textColor_ = QColor(24, 24, 24, 255);
+  QColor shapeFillColor_ = QColor(45, 156, 219, 120);
+  QColor shapeStrokeColor_ = QColor(24, 24, 24, 255);
+  int brushSize_ = 24;
+  int brushOpacity_ = 100;
+  int eraserSize_ = 24;
+  int fillTolerance_ = 0;
+  int textPointSize_ = 48;
+  int shapeWidth_ = 240;
+  int shapeHeight_ = 160;
+  int shapeStrokeWidth_ = 4;
   bool dirty_ = false;
   bool refreshingLayerPanel_ = false;
 };

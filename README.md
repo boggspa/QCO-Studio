@@ -11,7 +11,7 @@ This repository is currently Phase 1. The app skeleton includes:
 - Native `.qco` project package skeleton saved as a ZIP-compatible archive.
 - Native `.qco` project reopen for Phase 1 raster-layer packages.
 - Basic raster layer add, duplicate, rename, reorder, visibility, opacity, and canvas move controls.
-- Initial editing tools: brush, eraser, flood fill, crop-to-layer, raster-backed text layer, and raster-backed shape layer.
+- Initial editing tools: configurable brush, eraser, flood fill, drag crop, crop-to-layer, raster-backed text layer, and raster-backed shape layer.
 - Core document/layer model and command undo stack.
 - Core, archive round-trip, and canvas smoke tests.
 

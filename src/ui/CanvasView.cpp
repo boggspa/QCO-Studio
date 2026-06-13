@@ -23,6 +23,23 @@ constexpr int checkerSize = 16;
   return std::clamp(zoom, minZoom, maxZoom);
 }
 
+[[nodiscard]] QPoint clampedDocumentPoint(QPoint point, QSize size)
+{
+  return {
+    std::clamp(point.x(), 0, size.width()),
+    std::clamp(point.y(), 0, size.height()),
+  };
+}
+
+[[nodiscard]] QRect documentRectBetween(QPoint start, QPoint end)
+{
+  const int left = std::min(start.x(), end.x());
+  const int top = std::min(start.y(), end.y());
+  const int right = std::max(start.x(), end.x());
+  const int bottom = std::max(start.y(), end.y());
+  return QRect(QPoint(left, top), QSize(right - left, bottom - top));
+}
+
 }  // namespace
 
 CanvasView::CanvasView(QWidget* parent)
@@ -82,7 +99,11 @@ void CanvasView::setActiveTool(Tool tool)
   }
 
   activeTool_ = tool;
+  cropping_ = false;
+  drawingStroke_ = false;
+  movingLayer_ = false;
   unsetCursor();
+  update();
 }
 
 CanvasView::Tool CanvasView::activeTool() const noexcept
@@ -191,6 +212,24 @@ void CanvasView::paintEvent(QPaintEvent* event)
   painter.setPen(borderPen);
   painter.setBrush(Qt::NoBrush);
   painter.drawRect(documentRect);
+
+  if (cropping_) {
+    const QRect cropRect = documentRectBetween(cropStartPoint_, cropEndPoint_)
+                             .intersected(QRect(QPoint(0, 0), documentSize_));
+    if (!cropRect.isEmpty()) {
+      const QRectF cropPreview(cropRect);
+      painter.fillRect(cropPreview, QColor(45, 156, 219, 32));
+
+      QPen cropPen(QColor(255, 255, 255));
+      cropPen.setCosmetic(true);
+      cropPen.setWidth(1);
+      cropPen.setStyle(Qt::DashLine);
+      painter.setPen(cropPen);
+      painter.setBrush(Qt::NoBrush);
+      painter.drawRect(cropPreview);
+    }
+  }
+
   painter.restore();
 }
 
@@ -227,7 +266,19 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
 
   if (event->button() == Qt::LeftButton) {
     const auto documentPoint = widgetToDocument(event->position());
-    const QPoint roundedDocumentPoint(qRound(documentPoint.x()), qRound(documentPoint.y()));
+    const QPoint roundedDocumentPoint = clampedDocumentPoint(
+      QPoint(qRound(documentPoint.x()), qRound(documentPoint.y())),
+      documentSize_);
+
+    if (activeTool_ == Tool::Crop) {
+      cropping_ = true;
+      cropStartPoint_ = roundedDocumentPoint;
+      cropEndPoint_ = roundedDocumentPoint;
+      setCursor(Qt::CrossCursor);
+      update();
+      event->accept();
+      return;
+    }
 
     if (activeTool_ == Tool::Brush || activeTool_ == Tool::Eraser) {
       drawingStroke_ = true;
@@ -238,7 +289,7 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
       return;
     }
 
-    if (activeTool_ == Tool::Fill || activeTool_ == Tool::Text || activeTool_ == Tool::Shape || activeTool_ == Tool::Crop) {
+    if (activeTool_ == Tool::Fill || activeTool_ == Tool::Text || activeTool_ == Tool::Shape) {
       emit toolDocumentClicked(activeTool_, roundedDocumentPoint);
       event->accept();
       return;
@@ -272,9 +323,21 @@ void CanvasView::mousePressEvent(QMouseEvent* event)
 
 void CanvasView::mouseMoveEvent(QMouseEvent* event)
 {
+  if (cropping_) {
+    const auto documentPoint = widgetToDocument(event->position());
+    cropEndPoint_ = clampedDocumentPoint(
+      QPoint(qRound(documentPoint.x()), qRound(documentPoint.y())),
+      documentSize_);
+    update();
+    event->accept();
+    return;
+  }
+
   if (drawingStroke_) {
     const auto documentPoint = widgetToDocument(event->position());
-    const QPoint roundedDocumentPoint(qRound(documentPoint.x()), qRound(documentPoint.y()));
+    const QPoint roundedDocumentPoint = clampedDocumentPoint(
+      QPoint(qRound(documentPoint.x()), qRound(documentPoint.y())),
+      documentSize_);
     if (roundedDocumentPoint != lastStrokePoint_) {
       emit rasterStrokePreview(activeTool_, lastStrokePoint_, roundedDocumentPoint);
       lastStrokePoint_ = roundedDocumentPoint;
@@ -311,6 +374,26 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event)
 
 void CanvasView::mouseReleaseEvent(QMouseEvent* event)
 {
+  if (cropping_ && event->button() == Qt::LeftButton) {
+    cropping_ = false;
+    unsetCursor();
+
+    const auto documentPoint = widgetToDocument(event->position());
+    cropEndPoint_ = clampedDocumentPoint(
+      QPoint(qRound(documentPoint.x()), qRound(documentPoint.y())),
+      documentSize_);
+
+    const QRect cropRect = documentRectBetween(cropStartPoint_, cropEndPoint_)
+                             .intersected(QRect(QPoint(0, 0), documentSize_));
+    update();
+    if (cropRect.width() >= 2 && cropRect.height() >= 2) {
+      emit cropCommitted(cropRect);
+    }
+
+    event->accept();
+    return;
+  }
+
   if (drawingStroke_ && event->button() == Qt::LeftButton) {
     drawingStroke_ = false;
     emit rasterStrokeCommitted(activeTool_);

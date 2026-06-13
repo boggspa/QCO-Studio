@@ -1,9 +1,10 @@
 #pragma once
 
-#include <QImage>
 #include <QColor>
+#include <QImage>
 #include <QPoint>
 #include <QPointF>
+#include <QRect>
 #include <QSize>
 #include <QVector>
 #include <QWidget>
@@ -69,6 +70,7 @@ signals:
   void rasterStrokePreview(Tool tool, QPoint fromDocumentPoint, QPoint toDocumentPoint);
   void rasterStrokeCommitted(Tool tool);
   void toolDocumentClicked(Tool tool, QPoint documentPoint);
+  void cropCommitted(QRect documentRect);
 
 protected:
   void paintEvent(QPaintEvent* event) override;
@@ -93,10 +95,13 @@ private:
   bool panning_ = false;
   bool movingLayer_ = false;
   bool drawingStroke_ = false;
+  bool cropping_ = false;
   QPoint moveStartPosition_;
   QPoint moveLastPosition_;
   QPointF moveOffset_;
   QPoint lastStrokePoint_;
+  QPoint cropStartPoint_;
+  QPoint cropEndPoint_;
   QPoint lastMousePosition_;
 };
 

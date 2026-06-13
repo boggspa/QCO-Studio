@@ -3,6 +3,8 @@
 #include <QApplication>
 #include <QColor>
 #include <QImage>
+#include <QMouseEvent>
+#include <QRect>
 
 #include <iostream>
 
@@ -55,6 +57,44 @@ int main(int argc, char** argv)
   CHECK(composite.size() == QSize(8, 8));
   CHECK(composite.pixelColor(0, 0).alpha() == 0);
   CHECK(composite.pixelColor(2, 2) == QColor(0, 128, 255, 255));
+
+  QRect cropRect;
+  QObject::connect(&canvas, &qco::ui::CanvasView::cropCommitted, [&cropRect](QRect documentRect) {
+    cropRect = documentRect;
+  });
+
+  canvas.resize(200, 200);
+  canvas.setDocumentSize(QSize(100, 100));
+  canvas.setZoom(1.0);
+  canvas.setActiveTool(qco::ui::CanvasView::Tool::Crop);
+
+  QMouseEvent press(
+    QEvent::MouseButtonPress,
+    QPointF(60, 62),
+    QPointF(60, 62),
+    Qt::LeftButton,
+    Qt::LeftButton,
+    Qt::NoModifier);
+  QApplication::sendEvent(&canvas, &press);
+
+  QMouseEvent move(
+    QEvent::MouseMove,
+    QPointF(90, 90),
+    QPointF(90, 90),
+    Qt::NoButton,
+    Qt::LeftButton,
+    Qt::NoModifier);
+  QApplication::sendEvent(&canvas, &move);
+
+  QMouseEvent release(
+    QEvent::MouseButtonRelease,
+    QPointF(90, 90),
+    QPointF(90, 90),
+    Qt::LeftButton,
+    Qt::NoButton,
+    Qt::NoModifier);
+  QApplication::sendEvent(&canvas, &release);
+  CHECK(cropRect == QRect(10, 12, 30, 28));
 
   return 0;
 }

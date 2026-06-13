@@ -8,6 +8,8 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QColorDialog>
+#include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -81,6 +83,14 @@ constexpr int defaultDocumentHeight = 1080;
   return {point.x(), point.y()};
 }
 
+[[nodiscard]] bool colorsWithinTolerance(const QColor& left, const QColor& right, int tolerance)
+{
+  return std::abs(left.red() - right.red()) <= tolerance
+         && std::abs(left.green() - right.green()) <= tolerance
+         && std::abs(left.blue() - right.blue()) <= tolerance
+         && std::abs(left.alpha() - right.alpha()) <= tolerance;
+}
+
 }  // namespace
 
 MainWindow::MainWindow(QWidget* parent)
@@ -108,6 +118,7 @@ MainWindow::MainWindow(QWidget* parent)
   connect(canvas_, &CanvasView::rasterStrokePreview, this, &MainWindow::previewRasterStroke);
   connect(canvas_, &CanvasView::rasterStrokeCommitted, this, &MainWindow::commitRasterStroke);
   connect(canvas_, &CanvasView::toolDocumentClicked, this, &MainWindow::handleToolDocumentClick);
+  connect(canvas_, &CanvasView::cropCommitted, this, &MainWindow::cropDocumentToRect);
 
   restoreGeometry(settings_.value(QStringLiteral("window/geometry")).toByteArray());
   restoreState(settings_.value(QStringLiteral("window/state")).toByteArray());
@@ -624,10 +635,6 @@ void MainWindow::setToolFromAction(QAction* action)
   const auto tool = static_cast<CanvasView::Tool>(toolValue);
   canvas_->setActiveTool(tool);
   statusBar()->showMessage(tr("%1 tool").arg(action->text()), 2000);
-
-  if (tool == CanvasView::Tool::Crop) {
-    cropToSelectedLayer();
-  }
 }
 
 void MainWindow::beginRasterStroke(CanvasView::Tool tool, QPoint documentPoint)
@@ -681,12 +688,41 @@ void MainWindow::handleToolDocumentClick(CanvasView::Tool tool, QPoint documentP
     case CanvasView::Tool::Shape:
       addShapeLayerAt(documentPoint);
       break;
-    case CanvasView::Tool::Crop:
-      cropToSelectedLayer();
-      break;
     default:
       break;
   }
+}
+
+void MainWindow::cropDocumentToRect(QRect documentRect)
+{
+  if (!document_) {
+    return;
+  }
+
+  documentRect = documentRect.intersected(QRect(QPoint(0, 0), toQtSize(document_->canvasSize())));
+  if (!documentRect.isValid() || documentRect.isEmpty()) {
+    statusBar()->showMessage(tr("Drag a crop area inside the document"), 3000);
+    return;
+  }
+
+  if (documentRect.topLeft() == QPoint(0, 0) && documentRect.size() == toQtSize(document_->canvasSize())) {
+    statusBar()->showMessage(tr("Crop area already matches the canvas"), 3000);
+    return;
+  }
+
+  auto before = captureState();
+  document_->resizeCanvas(toCoreSize(documentRect.size()));
+
+  const auto layerSnapshot = document_->layers();
+  for (const auto& layer : layerSnapshot) {
+    (void)document_->setLayerPosition(layer.id, {layer.position.x - documentRect.x(), layer.position.y - documentRect.y()});
+  }
+
+  for (auto& imageLayer : layers_) {
+    imageLayer.position -= documentRect.topLeft();
+  }
+
+  pushStateCommand(tr("Crop Canvas"), std::move(before), captureState());
 }
 
 void MainWindow::fitCanvasToView()
@@ -891,6 +927,8 @@ void MainWindow::createPanels()
   connect(layerDownButton_, &QPushButton::clicked, this, &MainWindow::moveSelectedLayerDown);
   connect(opacitySlider_, &QSlider::valueChanged, this, &MainWindow::selectedLayerOpacityChanged);
 
+  createToolOptionsPanel();
+
   auto* propertiesDock = new QDockWidget(tr("Properties"), this);
   propertiesDock->setObjectName(QStringLiteral("propertiesDock"));
   propertiesLabel_ = new QLabel(propertiesDock);
@@ -906,6 +944,98 @@ void MainWindow::createPanels()
   historyDock->setWidget(historyList_);
   addDockWidget(Qt::RightDockWidgetArea, historyDock);
   tabifyDockWidget(propertiesDock, historyDock);
+}
+
+void MainWindow::createToolOptionsPanel()
+{
+  auto* toolOptionsDock = new QDockWidget(tr("Tool Options"), this);
+  toolOptionsDock->setObjectName(QStringLiteral("toolOptionsDock"));
+
+  auto* optionsPanel = new QWidget(toolOptionsDock);
+  auto* optionsLayout = new QVBoxLayout(optionsPanel);
+  optionsLayout->setContentsMargins(8, 8, 8, 8);
+  optionsLayout->setSpacing(8);
+
+  auto* form = new QFormLayout();
+  form->setLabelAlignment(Qt::AlignLeft);
+
+  const auto makeSpinBox = [optionsPanel](int minimum, int maximum, int value) {
+    auto* input = new QSpinBox(optionsPanel);
+    input->setRange(minimum, maximum);
+    input->setValue(value);
+    return input;
+  };
+
+  brushColorButton_ = new QPushButton(optionsPanel);
+  brushSizeInput_ = makeSpinBox(1, 256, brushSize_);
+  brushOpacityInput_ = makeSpinBox(1, 100, brushOpacity_);
+  eraserSizeInput_ = makeSpinBox(1, 256, eraserSize_);
+  fillColorButton_ = new QPushButton(optionsPanel);
+  fillToleranceInput_ = makeSpinBox(0, 255, fillTolerance_);
+  textColorButton_ = new QPushButton(optionsPanel);
+  textSizeInput_ = makeSpinBox(6, 240, textPointSize_);
+  shapeTypeInput_ = new QComboBox(optionsPanel);
+  shapeTypeInput_->addItem(tr("Rectangle"), QStringLiteral("rectangle"));
+  shapeTypeInput_->addItem(tr("Ellipse"), QStringLiteral("ellipse"));
+  shapeWidthInput_ = makeSpinBox(24, 4096, shapeWidth_);
+  shapeHeightInput_ = makeSpinBox(24, 4096, shapeHeight_);
+  shapeFillColorButton_ = new QPushButton(optionsPanel);
+  shapeStrokeColorButton_ = new QPushButton(optionsPanel);
+  shapeStrokeWidthInput_ = makeSpinBox(0, 128, shapeStrokeWidth_);
+
+  updateColorButton(brushColorButton_, brushColor_);
+  updateColorButton(fillColorButton_, fillColor_);
+  updateColorButton(textColorButton_, textColor_);
+  updateColorButton(shapeFillColorButton_, shapeFillColor_);
+  updateColorButton(shapeStrokeColorButton_, shapeStrokeColor_);
+
+  connect(brushColorButton_, &QPushButton::clicked, this, [this]() {
+    chooseToolColor(tr("Brush Color"), brushColor_, brushColorButton_);
+  });
+  connect(fillColorButton_, &QPushButton::clicked, this, [this]() {
+    chooseToolColor(tr("Fill Color"), fillColor_, fillColorButton_);
+  });
+  connect(textColorButton_, &QPushButton::clicked, this, [this]() {
+    chooseToolColor(tr("Text Color"), textColor_, textColorButton_);
+  });
+  connect(shapeFillColorButton_, &QPushButton::clicked, this, [this]() {
+    chooseToolColor(tr("Shape Fill Color"), shapeFillColor_, shapeFillColorButton_);
+  });
+  connect(shapeStrokeColorButton_, &QPushButton::clicked, this, [this]() {
+    chooseToolColor(tr("Shape Stroke Color"), shapeStrokeColor_, shapeStrokeColorButton_);
+  });
+  connect(brushSizeInput_, &QSpinBox::valueChanged, this, [this](int value) { brushSize_ = value; });
+  connect(brushOpacityInput_, &QSpinBox::valueChanged, this, [this](int value) { brushOpacity_ = value; });
+  connect(eraserSizeInput_, &QSpinBox::valueChanged, this, [this](int value) { eraserSize_ = value; });
+  connect(fillToleranceInput_, &QSpinBox::valueChanged, this, [this](int value) { fillTolerance_ = value; });
+  connect(textSizeInput_, &QSpinBox::valueChanged, this, [this](int value) { textPointSize_ = value; });
+  connect(shapeWidthInput_, &QSpinBox::valueChanged, this, [this](int value) { shapeWidth_ = value; });
+  connect(shapeHeightInput_, &QSpinBox::valueChanged, this, [this](int value) { shapeHeight_ = value; });
+  connect(shapeStrokeWidthInput_, &QSpinBox::valueChanged, this, [this](int value) { shapeStrokeWidth_ = value; });
+
+  form->addRow(tr("Brush Color"), brushColorButton_);
+  form->addRow(tr("Brush Size"), brushSizeInput_);
+  form->addRow(tr("Brush Opacity"), brushOpacityInput_);
+  form->addRow(tr("Eraser Size"), eraserSizeInput_);
+  form->addRow(tr("Fill Color"), fillColorButton_);
+  form->addRow(tr("Fill Tolerance"), fillToleranceInput_);
+  form->addRow(tr("Text Color"), textColorButton_);
+  form->addRow(tr("Text Size"), textSizeInput_);
+  form->addRow(tr("Shape"), shapeTypeInput_);
+  form->addRow(tr("Shape Width"), shapeWidthInput_);
+  form->addRow(tr("Shape Height"), shapeHeightInput_);
+  form->addRow(tr("Shape Fill"), shapeFillColorButton_);
+  form->addRow(tr("Shape Stroke"), shapeStrokeColorButton_);
+  form->addRow(tr("Stroke Width"), shapeStrokeWidthInput_);
+  optionsLayout->addLayout(form);
+
+  cropSelectedLayerButton_ = new QPushButton(tr("Crop To Selected Layer"), optionsPanel);
+  connect(cropSelectedLayerButton_, &QPushButton::clicked, this, &MainWindow::cropToSelectedLayer);
+  optionsLayout->addWidget(cropSelectedLayerButton_);
+  optionsLayout->addStretch(1);
+
+  toolOptionsDock->setWidget(optionsPanel);
+  addDockWidget(Qt::RightDockWidgetArea, toolOptionsDock);
 }
 
 void MainWindow::createInitialDocument()
@@ -1067,6 +1197,9 @@ void MainWindow::updateActions()
     layerUpButton_->setEnabled(layerUpAction_->isEnabled());
     layerDownButton_->setEnabled(layerDownAction_->isEnabled());
   }
+  if (cropSelectedLayerButton_ != nullptr) {
+    cropSelectedLayerButton_->setEnabled(hasSelectedLayer);
+  }
 }
 
 void MainWindow::updateWindowTitle()
@@ -1110,7 +1243,10 @@ void MainWindow::applyStrokeToSelectedLayer(CanvasView::Tool tool, QPoint fromDo
   const QPoint from = fromDocumentPoint - imageLayer->position;
   const QPoint to = toDocumentPoint - imageLayer->position;
   QRect imageRect(QPoint(0, 0), imageLayer->image.size());
-  if (!imageRect.adjusted(-32, -32, 32, 32).contains(from) && !imageRect.adjusted(-32, -32, 32, 32).contains(to)) {
+  const int toolSize = tool == CanvasView::Tool::Eraser ? eraserSize_ : brushSize_;
+  const int boundsPadding = std::max(32, toolSize);
+  if (!imageRect.adjusted(-boundsPadding, -boundsPadding, boundsPadding, boundsPadding).contains(from)
+      && !imageRect.adjusted(-boundsPadding, -boundsPadding, boundsPadding, boundsPadding).contains(to)) {
     return;
   }
 
@@ -1120,8 +1256,10 @@ void MainWindow::applyStrokeToSelectedLayer(CanvasView::Tool tool, QPoint fromDo
     painter.setCompositionMode(QPainter::CompositionMode_Clear);
   }
 
-  QPen pen(tool == CanvasView::Tool::Eraser ? QColor(0, 0, 0, 255) : QColor(24, 24, 24, 255));
-  pen.setWidth(24);
+  QColor strokeColor = brushColor_;
+  strokeColor.setAlpha(qRound(255.0 * static_cast<qreal>(brushOpacity_) / 100.0));
+  QPen pen(tool == CanvasView::Tool::Eraser ? QColor(0, 0, 0, 255) : strokeColor);
+  pen.setWidth(toolSize);
   pen.setCapStyle(Qt::RoundCap);
   pen.setJoinStyle(Qt::RoundJoin);
   painter.setPen(pen);
@@ -1149,9 +1287,8 @@ void MainWindow::fillSelectedLayerAt(QPoint documentPoint)
 
   const auto before = captureState();
   QImage& image = imageLayer->image;
-  const QRgb target = image.pixel(localPoint);
-  const QColor fillColor(24, 24, 24, 255);
-  if (target == fillColor.rgba()) {
+  const QColor targetColor = image.pixelColor(localPoint);
+  if (colorsWithinTolerance(targetColor, fillColor_, fillTolerance_)) {
     return;
   }
 
@@ -1161,11 +1298,11 @@ void MainWindow::fillSelectedLayerAt(QPoint documentPoint)
 
   while (!stack.isEmpty()) {
     const QPoint point = stack.takeLast();
-    if (!imageRect.contains(point) || image.pixel(point) != target) {
+    if (!imageRect.contains(point) || !colorsWithinTolerance(image.pixelColor(point), targetColor, fillTolerance_)) {
       continue;
     }
 
-    image.setPixelColor(point, fillColor);
+    image.setPixelColor(point, fillColor_);
     stack.push_back(QPoint(point.x() + 1, point.y()));
     stack.push_back(QPoint(point.x() - 1, point.y()));
     stack.push_back(QPoint(point.x(), point.y() + 1));
@@ -1196,7 +1333,7 @@ void MainWindow::addTextLayerAt(QPoint documentPoint)
 
   auto before = captureState();
   QFont font;
-  font.setPointSize(48);
+  font.setPointSize(textPointSize_);
   font.setBold(false);
   const QFontMetrics metrics(font);
   const QRect textBounds = metrics.boundingRect(text).adjusted(-8, -8, 8, 8);
@@ -1207,7 +1344,7 @@ void MainWindow::addTextLayerAt(QPoint documentPoint)
   QPainter painter(&image);
   painter.setRenderHint(QPainter::Antialiasing, true);
   painter.setFont(font);
-  painter.setPen(QColor(24, 24, 24, 255));
+  painter.setPen(textColor_);
   painter.drawText(QPoint(8, 8 + metrics.ascent()), text);
   painter.end();
 
@@ -1234,23 +1371,23 @@ void MainWindow::addShapeLayerAt(QPoint documentPoint)
     return;
   }
 
-  const QStringList shapes = {tr("Rectangle"), tr("Ellipse")};
-  bool ok = false;
-  const auto shape = QInputDialog::getItem(this, tr("Add Shape"), tr("Shape"), shapes, 0, false, &ok);
-  if (!ok || shape.isEmpty()) {
-    return;
-  }
+  const auto shapeKey = shapeTypeInput_ == nullptr ? QStringLiteral("rectangle") : shapeTypeInput_->currentData().toString();
+  const auto shape = shapeTypeInput_ == nullptr ? tr("Rectangle") : shapeTypeInput_->currentText();
 
   auto before = captureState();
-  QImage image(QSize(240, 160), QImage::Format_ARGB32_Premultiplied);
+  QImage image(QSize(shapeWidth_, shapeHeight_), QImage::Format_ARGB32_Premultiplied);
   image.fill(Qt::transparent);
 
   QPainter painter(&image);
   painter.setRenderHint(QPainter::Antialiasing, true);
-  painter.setPen(QPen(QColor(24, 24, 24, 255), 4));
-  painter.setBrush(QColor(45, 156, 219, 120));
+  if (shapeStrokeWidth_ == 0) {
+    painter.setPen(Qt::NoPen);
+  } else {
+    painter.setPen(QPen(shapeStrokeColor_, shapeStrokeWidth_));
+  }
+  painter.setBrush(shapeFillColor_);
   const QRectF bounds(8, 8, image.width() - 16, image.height() - 16);
-  if (shape == tr("Ellipse")) {
+  if (shapeKey == QStringLiteral("ellipse")) {
     painter.drawEllipse(bounds);
   } else {
     painter.drawRect(bounds);
@@ -1286,18 +1423,34 @@ void MainWindow::cropToSelectedLayer()
     return;
   }
 
-  auto before = captureState();
-  document_->resizeCanvas(toCoreSize(cropRect.size()));
+  cropDocumentToRect(cropRect);
+}
 
-  for (const auto& layer : document_->layers()) {
-    (void)document_->setLayerPosition(layer.id, {layer.position.x - cropRect.x(), layer.position.y - cropRect.y()});
+void MainWindow::updateColorButton(QPushButton* button, const QColor& color)
+{
+  if (button == nullptr) {
+    return;
   }
 
-  for (auto& imageLayer : layers_) {
-    imageLayer.position -= cropRect.topLeft();
+  const auto label = color.alpha() == 255
+                       ? color.name(QColor::HexRgb).toUpper()
+                       : color.name(QColor::HexArgb).toUpper();
+  const int luminance = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000;
+  const auto textColor = luminance < 128 ? QStringLiteral("#FFFFFF") : QStringLiteral("#111111");
+  button->setText(label);
+  button->setStyleSheet(
+    QStringLiteral("background-color: %1; color: %2;").arg(color.name(QColor::HexArgb), textColor));
+}
+
+void MainWindow::chooseToolColor(const QString& title, QColor& color, QPushButton* button)
+{
+  const QColor selected = QColorDialog::getColor(color, this, title, QColorDialog::ShowAlphaChannel);
+  if (!selected.isValid()) {
+    return;
   }
 
-  pushStateCommand(tr("Crop Canvas"), std::move(before), captureState());
+  color = selected;
+  updateColorButton(button, color);
 }
 
 void MainWindow::rememberDirectory(const QString& filePath)
