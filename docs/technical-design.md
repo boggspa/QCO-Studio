@@ -104,7 +104,7 @@ Phase 1 uses CMake presets. The core library and tests build without Qt. The des
 ## 15. Test Plan
 
 - Core unit tests for document/layer invariants and undo stack behavior.
-- File round-trip tests for `.qco` once read support is added.
+- File round-trip tests for `.qco` archive structure, multi-layer ordering, image payloads, and layer metadata.
 - Golden image tests for renderer determinism after Skia lands.
 - UI interaction tests for canvas pan/zoom, tool gestures, dialogs, and export.
 - Performance tests for large images, many layers, tile invalidation, and cancellation.
