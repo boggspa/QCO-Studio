@@ -16,6 +16,7 @@
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSettings>
+#include <QSlider>
 #include <QSpinBox>
 #include <QStringList>
 #include <QTemporaryDir>
@@ -82,6 +83,60 @@ void clickCanvas(qco::ui::CanvasView& canvas)
     return layer.id == id;
   });
   return it == layers.end() ? nullptr : &(*it);
+}
+
+[[nodiscard]] QListWidgetItem* findLayerListItem(QListWidget& list, std::uint64_t id)
+{
+  for (int row = 0; row < list.count(); ++row) {
+    auto* item = list.item(row);
+    if (item != nullptr && item->data(Qt::UserRole).toULongLong() == id) {
+      return item;
+    }
+  }
+  return nullptr;
+}
+
+[[nodiscard]] QPointF widgetPointForDocumentPoint(
+  const qco::ui::CanvasView& canvas,
+  const QPointF documentPoint)
+{
+  return QPointF(canvas.width() / 2.0, canvas.height() / 2.0)
+         + (documentPoint
+            - QPointF(canvas.documentSize().width() / 2.0, canvas.documentSize().height() / 2.0))
+             * canvas.zoom();
+}
+
+void dragCanvasDocumentPoint(qco::ui::CanvasView& canvas, QPointF fromDocumentPoint, QPointF toDocumentPoint)
+{
+  const QPointF from = widgetPointForDocumentPoint(canvas, fromDocumentPoint);
+  const QPointF to = widgetPointForDocumentPoint(canvas, toDocumentPoint);
+
+  QMouseEvent press(
+    QEvent::MouseButtonPress,
+    from,
+    from,
+    Qt::LeftButton,
+    Qt::LeftButton,
+    Qt::NoModifier);
+  QApplication::sendEvent(&canvas, &press);
+
+  QMouseEvent move(
+    QEvent::MouseMove,
+    to,
+    to,
+    Qt::NoButton,
+    Qt::LeftButton,
+    Qt::NoModifier);
+  QApplication::sendEvent(&canvas, &move);
+
+  QMouseEvent release(
+    QEvent::MouseButtonRelease,
+    to,
+    to,
+    Qt::LeftButton,
+    Qt::NoButton,
+    Qt::NoModifier);
+  QApplication::sendEvent(&canvas, &release);
 }
 
 [[nodiscard]] bool clickVisibleMessageBoxButton(QMessageBox::StandardButton button)
@@ -394,6 +449,153 @@ int main(int argc, char** argv)
       CHECK(historyList->item(0) != nullptr);
       CHECK(historyList->item(0)->text().contains(QStringLiteral("No edits yet")));
     }
+  }
+
+  {
+    qco::ui::MainWindow window;
+    window.resize(1024, 720);
+    window.show();
+    QApplication::processEvents();
+
+    auto* canvas = window.findChild<qco::ui::CanvasView*>();
+    auto* layersDock = window.findChild<QDockWidget*>(QStringLiteral("layersDock"));
+    auto* layersList = layersDock == nullptr ? nullptr : layersDock->findChild<QListWidget*>();
+    auto* historyList = window.findChild<QListWidget*>(QStringLiteral("historyList"));
+    auto* propertiesLabel = window.findChild<QLabel*>(QStringLiteral("propertiesLabel"));
+    auto* addLayerButton = window.findChild<QPushButton*>(QStringLiteral("addLayerButton"));
+    auto* duplicateLayerButton = window.findChild<QPushButton*>(QStringLiteral("duplicateLayerButton"));
+    auto* layerUpButton = window.findChild<QPushButton*>(QStringLiteral("layerUpButton"));
+    auto* layerDownButton = window.findChild<QPushButton*>(QStringLiteral("layerDownButton"));
+    auto* opacitySlider = window.findChild<QSlider*>();
+    auto* undoAction = window.findChild<QAction*>(QStringLiteral("undoAction"));
+    auto* redoAction = window.findChild<QAction*>(QStringLiteral("redoAction"));
+    auto* moveAction = findAction(window, QStringLiteral("Move"));
+    CHECK(canvas != nullptr);
+    CHECK(layersDock != nullptr);
+    CHECK(layersList != nullptr);
+    CHECK(historyList != nullptr);
+    CHECK(propertiesLabel != nullptr);
+    CHECK(addLayerButton != nullptr);
+    CHECK(duplicateLayerButton != nullptr);
+    CHECK(layerUpButton != nullptr);
+    CHECK(layerDownButton != nullptr);
+    CHECK(opacitySlider != nullptr);
+    CHECK(undoAction != nullptr);
+    CHECK(redoAction != nullptr);
+    CHECK(moveAction != nullptr);
+
+    addLayerButton->click();
+    QApplication::processEvents();
+    const auto bottomLayerId = canvas->selectedLayerId();
+    addLayerButton->click();
+    QApplication::processEvents();
+    const auto topLayerId = canvas->selectedLayerId();
+    CHECK(bottomLayerId != 0);
+    CHECK(topLayerId != 0);
+    CHECK(bottomLayerId != topLayerId);
+    CHECK(canvas->layers().size() == 2);
+    CHECK(canvas->layers().front().id == bottomLayerId);
+    CHECK(canvas->layers().back().id == topLayerId);
+
+    CHECK(layerDownButton->isEnabled());
+    layerDownButton->click();
+    QApplication::processEvents();
+    CHECK(canvas->layers().front().id == topLayerId);
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Move Layer Down")));
+
+    CHECK(layerUpButton->isEnabled());
+    layerUpButton->click();
+    QApplication::processEvents();
+    CHECK(canvas->layers().back().id == topLayerId);
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Move Layer Up")));
+
+    duplicateLayerButton->click();
+    QApplication::processEvents();
+    const auto duplicateLayerId = canvas->selectedLayerId();
+    CHECK(duplicateLayerId != 0);
+    CHECK(duplicateLayerId != topLayerId);
+    CHECK(canvas->layers().size() == 3);
+    auto* duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->name.contains(QStringLiteral("Copy")));
+    CHECK(duplicateLayer->position == QPoint(16, 16));
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Duplicate Layer")));
+
+    auto* duplicateItem = findLayerListItem(*layersList, duplicateLayerId);
+    CHECK(duplicateItem != nullptr);
+    CHECK(duplicateItem->checkState() == Qt::Checked);
+    duplicateItem->setCheckState(Qt::Unchecked);
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(!duplicateLayer->visible);
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Hide Layer")));
+
+    undoAction->trigger();
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->visible);
+    redoAction->trigger();
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(!duplicateLayer->visible);
+    undoAction->trigger();
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->visible);
+
+    CHECK(opacitySlider->isEnabled());
+    opacitySlider->setValue(42);
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->opacity > 0.41);
+    CHECK(duplicateLayer->opacity < 0.43);
+    CHECK(propertiesLabel->text().contains(QStringLiteral("42% opacity")));
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Change Layer Opacity")));
+
+    undoAction->trigger();
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->opacity > 0.99);
+    redoAction->trigger();
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->opacity > 0.41);
+    CHECK(duplicateLayer->opacity < 0.43);
+
+    moveAction->trigger();
+    QApplication::processEvents();
+    CHECK(canvas->activeTool() == qco::ui::CanvasView::Tool::Move);
+    const auto beforeMovePosition = duplicateLayer->position;
+    dragCanvasDocumentPoint(*canvas, QPointF(960, 540), QPointF(992, 568));
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->position == beforeMovePosition + QPoint(32, 28));
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Move Layer")));
+
+    undoAction->trigger();
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->position == beforeMovePosition);
+    redoAction->trigger();
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->position == beforeMovePosition + QPoint(32, 28));
   }
 
   {
