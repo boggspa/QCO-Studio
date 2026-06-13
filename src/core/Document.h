@@ -104,6 +104,7 @@ public:
   [[nodiscard]] bool moveLayer(std::uint64_t id, std::size_t newIndex);
   [[nodiscard]] bool setLayerName(std::uint64_t id, std::string name);
   [[nodiscard]] bool setLayerVisibility(std::uint64_t id, bool visible);
+  [[nodiscard]] bool setLayerLocked(std::uint64_t id, bool locked);
   [[nodiscard]] bool setLayerOpacity(std::uint64_t id, double opacity);
   [[nodiscard]] bool setLayerPosition(std::uint64_t id, Point position);
 

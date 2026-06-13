@@ -56,17 +56,22 @@ bool documentPreservesExplicitLayerMetadata()
   CHECK(document.addLayer(layer));
   CHECK(document.addLayer(layer) == false);
   CHECK(document.setLayerVisibility(42, true));
+  CHECK(document.setLayerLocked(42, true));
   CHECK(document.setLayerOpacity(42, 1.5));
   CHECK(document.setLayerPosition(42, {9, 10}));
   CHECK(document.setLayerName(42, "Renamed"));
+  CHECK(!document.setLayerLocked(999, true));
 
   const auto* imported = document.findLayer(42);
   CHECK(imported != nullptr);
   CHECK(imported->name == "Renamed");
   CHECK(imported->visible);
+  CHECK(imported->locked);
   CHECK(imported->opacity == 1.0);
   CHECK(imported->position.x == 9);
   CHECK(imported->position.y == 10);
+  CHECK(document.setLayerLocked(42, false));
+  CHECK(!document.findLayer(42)->locked);
 
   const auto nextId = document.addLayer("Next", qco::core::LayerType::Raster, {1, 1});
   CHECK(nextId == 43);

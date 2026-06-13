@@ -473,6 +473,23 @@ void MainWindow::renameSelectedLayer()
   pushStateCommand(tr("Rename Layer"), std::move(before), captureState());
 }
 
+void MainWindow::toggleSelectedLayerLock()
+{
+  const auto* layer = selectedLayer();
+  if (!document_ || selectedLayerId_ == 0 || layer == nullptr) {
+    return;
+  }
+
+  const bool nextLocked = !layer->locked;
+  auto before = captureState();
+  if (!document_->setLayerLocked(selectedLayerId_, nextLocked)) {
+    return;
+  }
+
+  pushStateCommand(nextLocked ? tr("Lock Layer") : tr("Unlock Layer"), std::move(before), captureState());
+  statusBar()->showMessage(nextLocked ? tr("Layer locked") : tr("Layer unlocked"), 2000);
+}
+
 void MainWindow::moveSelectedLayerUp()
 {
   if (!document_ || selectedLayerId_ == 0) {
@@ -593,6 +610,13 @@ void MainWindow::beginCanvasLayerMove(std::uint64_t id)
   }
 
   setSelectedLayerId(id);
+  const auto* layer = selectedLayer();
+  if (layer != nullptr && layer->locked) {
+    pendingMoveBeforeState_.reset();
+    statusBar()->showMessage(tr("Selected layer is locked"), 3000);
+    return;
+  }
+
   pendingMoveBeforeState_ = captureState();
 }
 
@@ -602,7 +626,8 @@ void MainWindow::previewCanvasLayerMove(std::uint64_t id, QPoint position)
     return;
   }
 
-  if (!document_->setLayerPosition(id, toCorePoint(position))) {
+  const auto* layer = document_->findLayer(id);
+  if (layer == nullptr || layer->locked || !document_->setLayerPosition(id, toCorePoint(position))) {
     return;
   }
   const auto imageIt = std::find_if(layers_.begin(), layers_.end(), [id](const CanvasView::LayerImage& imageLayer) {
@@ -617,7 +642,8 @@ void MainWindow::previewCanvasLayerMove(std::uint64_t id, QPoint position)
 
 void MainWindow::commitCanvasLayerMove(std::uint64_t id, QPoint oldPosition, QPoint newPosition)
 {
-  if (!pendingMoveBeforeState_.has_value() || id == 0 || oldPosition == newPosition) {
+  const auto* layer = document_ == nullptr ? nullptr : document_->findLayer(id);
+  if (!pendingMoveBeforeState_.has_value() || id == 0 || oldPosition == newPosition || layer == nullptr || layer->locked) {
     pendingMoveBeforeState_.reset();
     return;
   }
@@ -649,6 +675,12 @@ void MainWindow::beginRasterStroke(CanvasView::Tool tool, QPoint documentPoint)
 
   if (selectedLayerImage() == nullptr) {
     statusBar()->showMessage(tr("Select or add a raster layer first"), 3000);
+    pendingRasterEditBeforeState_.reset();
+    return;
+  }
+  const auto* layer = selectedLayer();
+  if (layer != nullptr && layer->locked) {
+    statusBar()->showMessage(tr("Selected layer is locked"), 3000);
     pendingRasterEditBeforeState_.reset();
     return;
   }
@@ -702,6 +734,10 @@ void MainWindow::updateSelectedTextLayer()
     statusBar()->showMessage(tr("Select a text layer to update"), 3000);
     return;
   }
+  if (selected->locked) {
+    statusBar()->showMessage(tr("Selected layer is locked"), 3000);
+    return;
+  }
 
   const auto text = textContentInput_ == nullptr ? QString() : textContentInput_->text().trimmed();
   if (text.isEmpty()) {
@@ -746,6 +782,10 @@ void MainWindow::updateSelectedShapeLayer()
   const auto* selected = selectedLayer();
   if (!document_ || selected == nullptr || selectedLayerImage() == nullptr || selected->type != qco::core::LayerType::Shape) {
     statusBar()->showMessage(tr("Select a shape layer to update"), 3000);
+    return;
+  }
+  if (selected->locked) {
+    statusBar()->showMessage(tr("Selected layer is locked"), 3000);
     return;
   }
 
@@ -895,6 +935,10 @@ void MainWindow::createActions()
   renameLayerAction_->setObjectName(QStringLiteral("renameLayerAction"));
   connect(renameLayerAction_, &QAction::triggered, this, &MainWindow::renameSelectedLayer);
 
+  toggleLayerLockAction_ = new QAction(tr("Lock Layer"), this);
+  toggleLayerLockAction_->setObjectName(QStringLiteral("toggleLayerLockAction"));
+  connect(toggleLayerLockAction_, &QAction::triggered, this, &MainWindow::toggleSelectedLayerLock);
+
   layerUpAction_ = new QAction(tr("Move Layer Up"), this);
   layerUpAction_->setObjectName(QStringLiteral("moveLayerUpAction"));
   layerUpAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketRight));
@@ -946,6 +990,7 @@ void MainWindow::createMenus()
   layerMenu->addAction(addRasterLayerAction_);
   layerMenu->addAction(duplicateLayerAction_);
   layerMenu->addAction(renameLayerAction_);
+  layerMenu->addAction(toggleLayerLockAction_);
   layerMenu->addSeparator();
   layerMenu->addAction(layerUpAction_);
   layerMenu->addAction(layerDownAction_);
@@ -1008,11 +1053,19 @@ void MainWindow::createPanels()
   addLayerButton_ = new QPushButton(tr("Add"), layersPanel);
   duplicateLayerButton_ = new QPushButton(tr("Duplicate"), layersPanel);
   renameLayerButton_ = new QPushButton(tr("Rename"), layersPanel);
+  lockLayerButton_ = new QPushButton(tr("Lock"), layersPanel);
   layerUpButton_ = new QPushButton(tr("Up"), layersPanel);
   layerDownButton_ = new QPushButton(tr("Down"), layersPanel);
+  addLayerButton_->setObjectName(QStringLiteral("addLayerButton"));
+  duplicateLayerButton_->setObjectName(QStringLiteral("duplicateLayerButton"));
+  renameLayerButton_->setObjectName(QStringLiteral("renameLayerButton"));
+  lockLayerButton_->setObjectName(QStringLiteral("toggleLayerLockButton"));
+  layerUpButton_->setObjectName(QStringLiteral("layerUpButton"));
+  layerDownButton_->setObjectName(QStringLiteral("layerDownButton"));
   buttonRow->addWidget(addLayerButton_);
   buttonRow->addWidget(duplicateLayerButton_);
   buttonRow->addWidget(renameLayerButton_);
+  buttonRow->addWidget(lockLayerButton_);
   buttonRow->addWidget(layerUpButton_);
   buttonRow->addWidget(layerDownButton_);
   layersLayout->addLayout(buttonRow);
@@ -1033,6 +1086,7 @@ void MainWindow::createPanels()
   connect(addLayerButton_, &QPushButton::clicked, this, &MainWindow::addRasterLayer);
   connect(duplicateLayerButton_, &QPushButton::clicked, this, &MainWindow::duplicateSelectedLayer);
   connect(renameLayerButton_, &QPushButton::clicked, this, &MainWindow::renameSelectedLayer);
+  connect(lockLayerButton_, &QPushButton::clicked, this, &MainWindow::toggleSelectedLayerLock);
   connect(layerUpButton_, &QPushButton::clicked, this, &MainWindow::moveSelectedLayerUp);
   connect(layerDownButton_, &QPushButton::clicked, this, &MainWindow::moveSelectedLayerDown);
   connect(opacitySlider_, &QSlider::valueChanged, this, &MainWindow::selectedLayerOpacityChanged);
@@ -1042,6 +1096,7 @@ void MainWindow::createPanels()
   auto* propertiesDock = new QDockWidget(tr("Properties"), this);
   propertiesDock->setObjectName(QStringLiteral("propertiesDock"));
   propertiesLabel_ = new QLabel(propertiesDock);
+  propertiesLabel_->setObjectName(QStringLiteral("propertiesLabel"));
   propertiesLabel_->setAlignment(Qt::AlignTop | Qt::AlignLeft);
   propertiesLabel_->setMargin(12);
   propertiesLabel_->setTextInteractionFlags(Qt::TextSelectableByMouse);
@@ -1257,10 +1312,11 @@ void MainWindow::updateLayerPanel()
 
   for (auto it = document_->layers().rbegin(); it != document_->layers().rend(); ++it) {
     auto* item = new QListWidgetItem(
-      QStringLiteral("%1  [%2]")
+      QStringLiteral("%1  [%2]%3")
         .arg(QString::fromStdString(it->name))
         .arg(QString::fromUtf8(qco::core::toString(it->type).data(),
-                               static_cast<qsizetype>(qco::core::toString(it->type).size()))));
+                               static_cast<qsizetype>(qco::core::toString(it->type).size())))
+        .arg(it->locked ? tr(" locked") : QString()));
     item->setData(Qt::UserRole, QVariant::fromValue<qulonglong>(it->id));
     item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
     item->setCheckState(it->visible ? Qt::Checked : Qt::Unchecked);
@@ -1294,11 +1350,12 @@ void MainWindow::updatePropertiesPanel()
   const auto* layer = selectedLayer();
   const auto selectedText = layer == nullptr
                               ? tr("None")
-                              : tr("%1\n%2% opacity\nPosition %3, %4")
+                              : tr("%1\n%2% opacity\nPosition %3, %4\n%5")
                                   .arg(QString::fromStdString(layer->name))
                                   .arg(qRound(layer->opacity * 100.0))
                                   .arg(layer->position.x)
-                                  .arg(layer->position.y);
+                                  .arg(layer->position.y)
+                                  .arg(layer->locked ? tr("Locked") : tr("Unlocked"));
 
   propertiesLabel_->setText(tr("Document\n%1%2\n\nCanvas\n%3 x %4 px\n\nLayers\n%5\n\nSelected Layer\n%6\n\nLog\n%7")
                               .arg(documentTitle())
@@ -1326,13 +1383,17 @@ void MainWindow::updateHistoryPanel()
 void MainWindow::updateActions()
 {
   const auto hasDocument = document_ != nullptr;
-  const auto hasSelectedLayer = selectedLayerId_ != 0 && selectedLayer() != nullptr;
+  const auto* selected = selectedLayer();
+  const auto hasSelectedLayer = selectedLayerId_ != 0 && selected != nullptr;
+  const auto selectedLayerLocked = selected != nullptr && selected->locked;
   const auto selectedIndex = document_ == nullptr ? std::optional<std::size_t>() : document_->layerIndex(selectedLayerId_);
   saveAction_->setEnabled(hasDocument);
   exportAction_->setEnabled(hasDocument);
   addRasterLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasSelectedLayer);
   renameLayerAction_->setEnabled(hasSelectedLayer);
+  toggleLayerLockAction_->setEnabled(hasSelectedLayer);
+  toggleLayerLockAction_->setText(selectedLayerLocked ? tr("Unlock Layer") : tr("Lock Layer"));
   layerUpAction_->setEnabled(hasSelectedLayer && selectedIndex.has_value() && *selectedIndex + 1 < document_->layers().size());
   layerDownAction_->setEnabled(hasSelectedLayer && selectedIndex.has_value() && *selectedIndex > 0);
   fitAction_->setEnabled(hasDocument);
@@ -1343,6 +1404,8 @@ void MainWindow::updateActions()
   if (duplicateLayerButton_ != nullptr) {
     duplicateLayerButton_->setEnabled(hasSelectedLayer);
     renameLayerButton_->setEnabled(hasSelectedLayer);
+    lockLayerButton_->setEnabled(hasSelectedLayer);
+    lockLayerButton_->setText(selectedLayerLocked ? tr("Unlock") : tr("Lock"));
     layerUpButton_->setEnabled(layerUpAction_->isEnabled());
     layerDownButton_->setEnabled(layerDownAction_->isEnabled());
   }
@@ -1351,11 +1414,11 @@ void MainWindow::updateActions()
   }
   if (updateTextLayerButton_ != nullptr) {
     updateTextLayerButton_->setEnabled(
-      hasSelectedLayer && selectedLayer() != nullptr && selectedLayer()->type == qco::core::LayerType::Text);
+      hasSelectedLayer && selected != nullptr && selected->type == qco::core::LayerType::Text && !selectedLayerLocked);
   }
   if (updateShapeLayerButton_ != nullptr) {
     updateShapeLayerButton_->setEnabled(
-      hasSelectedLayer && selectedLayer() != nullptr && selectedLayer()->type == qco::core::LayerType::Shape);
+      hasSelectedLayer && selected != nullptr && selected->type == qco::core::LayerType::Shape && !selectedLayerLocked);
   }
 }
 
@@ -1466,6 +1529,11 @@ void MainWindow::syncCanvasLayers()
 
 void MainWindow::applyStrokeToSelectedLayer(CanvasView::Tool tool, QPoint fromDocumentPoint, QPoint toDocumentPoint)
 {
+  const auto* layer = selectedLayer();
+  if (layer != nullptr && layer->locked) {
+    return;
+  }
+
   auto* imageLayer = selectedLayerImage();
   if (imageLayer == nullptr || imageLayer->image.isNull()) {
     return;
@@ -1503,6 +1571,12 @@ void MainWindow::applyStrokeToSelectedLayer(CanvasView::Tool tool, QPoint fromDo
 
 void MainWindow::fillSelectedLayerAt(QPoint documentPoint)
 {
+  const auto* layer = selectedLayer();
+  if (layer != nullptr && layer->locked) {
+    statusBar()->showMessage(tr("Selected layer is locked"), 3000);
+    return;
+  }
+
   auto* imageLayer = selectedLayerImage();
   if (imageLayer == nullptr || imageLayer->image.isNull()) {
     statusBar()->showMessage(tr("Select or add a raster layer first"), 3000);

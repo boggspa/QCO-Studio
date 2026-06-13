@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QDockWidget>
 #include <QImage>
+#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenuBar>
@@ -137,10 +138,26 @@ int main(int argc, char** argv)
     CHECK(undoAction != nullptr);
     CHECK(textAction != nullptr);
     CHECK(shapeAction != nullptr);
+    auto* lockLayerButton = window.findChild<QPushButton*>(QStringLiteral("toggleLayerLockButton"));
+    auto* propertiesLabel = window.findChild<QLabel*>(QStringLiteral("propertiesLabel"));
+    CHECK(lockLayerButton != nullptr);
+    CHECK(propertiesLabel != nullptr);
 
     addLayerAction->trigger();
     QApplication::processEvents();
     CHECK(window.windowTitle().contains(QLatin1Char('*')));
+    CHECK(lockLayerButton->isEnabled());
+    CHECK(lockLayerButton->text() == QStringLiteral("Lock"));
+
+    lockLayerButton->click();
+    QApplication::processEvents();
+    CHECK(lockLayerButton->text() == QStringLiteral("Unlock"));
+    CHECK(propertiesLabel->text().contains(QStringLiteral("Locked")));
+
+    undoAction->trigger();
+    QApplication::processEvents();
+    CHECK(lockLayerButton->text() == QStringLiteral("Lock"));
+    CHECK(propertiesLabel->text().contains(QStringLiteral("Unlocked")));
 
     undoAction->trigger();
     QApplication::processEvents();
@@ -173,6 +190,22 @@ int main(int argc, char** argv)
     CHECK(textLayer != nullptr);
     CHECK(textLayer->name == QStringLiteral("Editable"));
     const auto initialTextSize = textLayer->image.size();
+    CHECK(updateTextLayerButton->isEnabled());
+
+    lockLayerButton->click();
+    QApplication::processEvents();
+    CHECK(propertiesLabel->text().contains(QStringLiteral("Locked")));
+    CHECK(!updateTextLayerButton->isEnabled());
+    textContentInput->setText(QStringLiteral("Blocked Edit"));
+    updateTextLayerButton->click();
+    QApplication::processEvents();
+    textLayer = findCanvasLayer(*canvas, textLayerId);
+    CHECK(textLayer != nullptr);
+    CHECK(textLayer->name == QStringLiteral("Editable"));
+
+    undoAction->trigger();
+    QApplication::processEvents();
+    CHECK(propertiesLabel->text().contains(QStringLiteral("Unlocked")));
     CHECK(updateTextLayerButton->isEnabled());
 
     textContentInput->setText(QStringLiteral("Edited"));

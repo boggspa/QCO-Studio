@@ -168,6 +168,17 @@ bool Document::setLayerVisibility(std::uint64_t id, bool visible)
   return true;
 }
 
+bool Document::setLayerLocked(std::uint64_t id, bool locked)
+{
+  auto* layer = findLayer(id);
+  if (layer == nullptr) {
+    return false;
+  }
+
+  layer->locked = locked;
+  return true;
+}
+
 bool Document::setLayerOpacity(std::uint64_t id, double opacity)
 {
   auto* layer = findLayer(id);

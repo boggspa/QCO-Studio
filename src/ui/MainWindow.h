@@ -45,6 +45,7 @@ private slots:
   void addRasterLayer();
   void duplicateSelectedLayer();
   void renameSelectedLayer();
+  void toggleSelectedLayerLock();
   void moveSelectedLayerUp();
   void moveSelectedLayerDown();
   void layerSelectionChanged(QListWidgetItem* current, QListWidgetItem* previous);
@@ -156,6 +157,7 @@ private:
   QPushButton* addLayerButton_ = nullptr;
   QPushButton* duplicateLayerButton_ = nullptr;
   QPushButton* renameLayerButton_ = nullptr;
+  QPushButton* lockLayerButton_ = nullptr;
   QPushButton* layerUpButton_ = nullptr;
   QPushButton* layerDownButton_ = nullptr;
 
@@ -167,6 +169,7 @@ private:
   QAction* addRasterLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
   QAction* renameLayerAction_ = nullptr;
+  QAction* toggleLayerLockAction_ = nullptr;
   QAction* layerUpAction_ = nullptr;
   QAction* layerDownAction_ = nullptr;
   QAction* fitAction_ = nullptr;
