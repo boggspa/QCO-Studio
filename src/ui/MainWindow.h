@@ -38,6 +38,7 @@ public:
   [[nodiscard]] bool openProjectFromPath(QString path);
   [[nodiscard]] bool saveProjectToPath(QString path);
   [[nodiscard]] bool exportImageToPath(QString path, QString selectedFilter = QString());
+  [[nodiscard]] bool renameSelectedLayerTo(QString name);
 
 private slots:
   void newDocument();

@@ -527,19 +527,36 @@ void MainWindow::renameSelectedLayer()
     currentName,
     &ok);
 
-  if (!ok || newName.trimmed().isEmpty() || newName == currentName) {
+  if (!ok) {
     return;
+  }
+
+  (void)renameSelectedLayerTo(newName);
+}
+
+bool MainWindow::renameSelectedLayerTo(QString name)
+{
+  const auto* layer = selectedLayer();
+  if (!document_ || layer == nullptr) {
+    return false;
+  }
+
+  name = name.trimmed();
+  const auto currentName = QString::fromStdString(layer->name);
+  if (name.isEmpty() || name == currentName) {
+    return false;
   }
 
   auto before = captureState();
-  if (!document_->setLayerName(selectedLayerId_, newName.toStdString())) {
-    return;
+  if (!document_->setLayerName(selectedLayerId_, name.toStdString())) {
+    return false;
   }
   if (auto* image = selectedLayerImage()) {
-    image->name = newName;
+    image->name = name;
   }
 
   pushStateCommand(tr("Rename Layer"), std::move(before), captureState());
+  return true;
 }
 
 void MainWindow::toggleSelectedLayerLock()

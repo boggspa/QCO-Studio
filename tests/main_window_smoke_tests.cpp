@@ -452,6 +452,7 @@ int main(int argc, char** argv)
       QApplication::processEvents();
       shapeLayerId = canvas->selectedLayerId();
       CHECK(findCanvasLayer(*canvas, shapeLayerId) != nullptr);
+      CHECK(window.renameSelectedLayerTo(QStringLiteral("Saved Shape")));
 
       CHECK(window.saveProjectToPath(projectPath));
       QApplication::processEvents();
@@ -476,7 +477,7 @@ int main(int argc, char** argv)
       CHECK(textLayer != nullptr);
       CHECK(shapeLayer != nullptr);
       CHECK(textLayer->name == QStringLiteral("Saved Text"));
-      CHECK(shapeLayer->name == QStringLiteral("Rectangle"));
+      CHECK(shapeLayer->name == QStringLiteral("Saved Shape"));
       CHECK(!reopenedWindow.windowTitle().contains(QLatin1Char('*')));
       CHECK(historyList->item(0) != nullptr);
       CHECK(historyList->item(0)->text().contains(QStringLiteral("No edits yet")));
@@ -556,6 +557,7 @@ int main(int argc, char** argv)
     auto* propertiesLabel = window.findChild<QLabel*>(QStringLiteral("propertiesLabel"));
     auto* addLayerButton = window.findChild<QPushButton*>(QStringLiteral("addLayerButton"));
     auto* duplicateLayerButton = window.findChild<QPushButton*>(QStringLiteral("duplicateLayerButton"));
+    auto* renameLayerButton = window.findChild<QPushButton*>(QStringLiteral("renameLayerButton"));
     auto* layerUpButton = window.findChild<QPushButton*>(QStringLiteral("layerUpButton"));
     auto* layerDownButton = window.findChild<QPushButton*>(QStringLiteral("layerDownButton"));
     auto* opacitySlider = window.findChild<QSlider*>();
@@ -569,6 +571,7 @@ int main(int argc, char** argv)
     CHECK(propertiesLabel != nullptr);
     CHECK(addLayerButton != nullptr);
     CHECK(duplicateLayerButton != nullptr);
+    CHECK(renameLayerButton != nullptr);
     CHECK(layerUpButton != nullptr);
     CHECK(layerDownButton != nullptr);
     CHECK(opacitySlider != nullptr);
@@ -613,8 +616,33 @@ int main(int argc, char** argv)
     CHECK(duplicateLayer != nullptr);
     CHECK(duplicateLayer->name.contains(QStringLiteral("Copy")));
     CHECK(duplicateLayer->position == QPoint(16, 16));
+    const auto duplicateOriginalName = duplicateLayer->name;
     CHECK(historyList->item(0) != nullptr);
     CHECK(historyList->item(0)->text().contains(QStringLiteral("Duplicate Layer")));
+
+    CHECK(renameLayerButton->isEnabled());
+    CHECK(window.renameSelectedLayerTo(QStringLiteral("  Composite Paint  ")));
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->name == QStringLiteral("Composite Paint"));
+    auto* renamedItem = findLayerListItem(*layersList, duplicateLayerId);
+    CHECK(renamedItem != nullptr);
+    CHECK(renamedItem->text().contains(QStringLiteral("Composite Paint")));
+    CHECK(propertiesLabel->text().contains(QStringLiteral("Composite Paint")));
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Rename Layer")));
+
+    undoAction->trigger();
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->name == duplicateOriginalName);
+    redoAction->trigger();
+    QApplication::processEvents();
+    duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
+    CHECK(duplicateLayer != nullptr);
+    CHECK(duplicateLayer->name == QStringLiteral("Composite Paint"));
 
     auto* duplicateItem = findLayerListItem(*layersList, duplicateLayerId);
     CHECK(duplicateItem != nullptr);
