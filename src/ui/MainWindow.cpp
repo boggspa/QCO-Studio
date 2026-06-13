@@ -28,7 +28,7 @@
 
 #include <algorithm>
 
-namespace qmx::ui {
+namespace qco::ui {
 namespace {
 
 constexpr int defaultDocumentWidth = 1920;
@@ -46,7 +46,7 @@ constexpr int defaultDocumentHeight = 1080;
   return QObject::tr("Images (%1);;All files (*)").arg(patterns.join(QLatin1Char(' ')));
 }
 
-[[nodiscard]] qmx::core::Size toCoreSize(QSize size)
+[[nodiscard]] qco::core::Size toCoreSize(QSize size)
 {
   return {size.width(), size.height()};
 }
@@ -55,7 +55,7 @@ constexpr int defaultDocumentHeight = 1080;
 
 MainWindow::MainWindow(QWidget* parent)
   : QMainWindow(parent),
-    settings_(QStringLiteral("QimageMax"), QStringLiteral("Qimage Max"))
+    settings_(QStringLiteral("QCOStudio"), QStringLiteral("QCO Studio"))
 {
   canvas_ = new CanvasView(this);
   setCentralWidget(canvas_);
@@ -114,7 +114,7 @@ void MainWindow::newDocument()
     return;
   }
 
-  auto document = qmx::core::Document::create(
+  auto document = qco::core::Document::create(
     "Untitled",
     {widthInput->value(), heightInput->value()});
 
@@ -147,13 +147,13 @@ void MainWindow::openImage()
   rememberDirectory(path);
 
   const QFileInfo info(path);
-  auto document = qmx::core::Document::create(
+  auto document = qco::core::Document::create(
     info.completeBaseName().toStdString(),
     toCoreSize(image.size()));
 
   const auto layerId = document.addLayer(
     info.fileName().toStdString(),
-    qmx::core::LayerType::Raster,
+    qco::core::LayerType::Raster,
     toCoreSize(image.size()));
 
   CanvasView::LayerImage layer;
@@ -183,15 +183,15 @@ void MainWindow::saveProject()
     path = QFileDialog::getSaveFileName(
       this,
       tr("Save Project"),
-      lastDirectory() + QLatin1Char('/') + documentTitle() + QStringLiteral(".qmxdoc"),
-      tr("Qimage Max Document (*.qmxdoc)"));
+      lastDirectory() + QLatin1Char('/') + documentTitle() + QStringLiteral(".qco"),
+      tr("QCO Studio Document (*.qco)"));
   }
 
   if (path.isEmpty()) {
     return;
   }
 
-  path = withDefaultSuffix(path, QStringLiteral("qmxdoc"));
+  path = withDefaultSuffix(path, QStringLiteral("qco"));
 
   QString error;
   if (!ProjectArchive::save(path, *document_, rasterLayerPayloads(), &error)) {
@@ -396,15 +396,15 @@ void MainWindow::createPanels()
 
 void MainWindow::createInitialDocument()
 {
-  auto document = qmx::core::Document::create(
+  auto document = qco::core::Document::create(
     "Untitled",
     {defaultDocumentWidth, defaultDocumentHeight});
   setDocument(std::move(document), {});
 }
 
-void MainWindow::setDocument(qmx::core::Document document, QVector<CanvasView::LayerImage> layers)
+void MainWindow::setDocument(qco::core::Document document, QVector<CanvasView::LayerImage> layers)
 {
-  document_ = std::make_unique<qmx::core::Document>(std::move(document));
+  document_ = std::make_unique<qco::core::Document>(std::move(document));
   layers_ = std::move(layers);
 
   canvas_->setDocumentSize(QSize(document_->canvasSize().width, document_->canvasSize().height));
@@ -428,8 +428,8 @@ void MainWindow::updateLayerPanel()
   for (auto it = document_->layers().rbegin(); it != document_->layers().rend(); ++it) {
     layersList_->addItem(QStringLiteral("%1  [%2]")
                            .arg(QString::fromStdString(it->name))
-                           .arg(QString::fromUtf8(qmx::core::toString(it->type).data(),
-                                                  static_cast<qsizetype>(qmx::core::toString(it->type).size()))));
+                           .arg(QString::fromUtf8(qco::core::toString(it->type).data(),
+                                                  static_cast<qsizetype>(qco::core::toString(it->type).size()))));
   }
 
   if (layersList_->count() == 0) {
@@ -449,7 +449,7 @@ void MainWindow::updatePropertiesPanel()
                               .arg(document_->canvasSize().width)
                               .arg(document_->canvasSize().height)
                               .arg(document_->layers().size())
-                              .arg(qmx::app::logFilePath()));
+                              .arg(qco::app::logFilePath()));
 }
 
 void MainWindow::updateHistoryPanel()
@@ -478,7 +478,7 @@ void MainWindow::updateActions()
 
 void MainWindow::updateWindowTitle()
 {
-  setWindowTitle(tr("%1 - Qimage Max").arg(documentTitle()));
+  setWindowTitle(tr("%1 - QCO Studio").arg(documentTitle()));
 }
 
 void MainWindow::rememberDirectory(const QString& filePath)
@@ -524,4 +524,4 @@ QVector<ProjectRasterLayer> MainWindow::rasterLayerPayloads() const
   return payloads;
 }
 
-}  // namespace qmx::ui
+}  // namespace qco::ui

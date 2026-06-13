@@ -8,7 +8,7 @@
 
 #include <cstdint>
 
-namespace qmx::ui {
+namespace qco::ui {
 
 struct ProjectRasterLayer {
   std::uint64_t id = 0;
@@ -20,9 +20,9 @@ class ProjectArchive {
 public:
   static bool save(
     const QString& filePath,
-    const qmx::core::Document& document,
+    const qco::core::Document& document,
     const QVector<ProjectRasterLayer>& rasterLayers,
     QString* errorMessage);
 };
 
-}  // namespace qmx::ui
+}  // namespace qco::ui

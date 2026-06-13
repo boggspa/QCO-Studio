@@ -14,7 +14,7 @@
 #include <limits>
 #include <string_view>
 
-namespace qmx::ui {
+namespace qco::ui {
 namespace {
 
 struct ZipEntry {
@@ -189,14 +189,14 @@ void writeUInt32(QIODevice& device, quint32 value)
 
 bool ProjectArchive::save(
   const QString& filePath,
-  const qmx::core::Document& document,
+  const qco::core::Document& document,
   const QVector<ProjectRasterLayer>& rasterLayers,
   QString* errorMessage)
 {
   QVector<ZipEntry> entries;
 
   QJsonObject manifest;
-  manifest.insert(QStringLiteral("format"), QStringLiteral("app.qimagemax.document"));
+  manifest.insert(QStringLiteral("format"), QStringLiteral("app.qcostudio.document"));
   manifest.insert(QStringLiteral("formatVersion"), 1);
   manifest.insert(QStringLiteral("appVersion"), QCoreApplication::applicationVersion());
   manifest.insert(QStringLiteral("createdAt"), QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
@@ -212,8 +212,8 @@ bool ProjectArchive::save(
     QJsonObject layerJson;
     layerJson.insert(QStringLiteral("id"), QString::number(layer.id));
     layerJson.insert(QStringLiteral("name"), QString::fromStdString(layer.name));
-    layerJson.insert(QStringLiteral("type"), fromView(qmx::core::toString(layer.type)));
-    layerJson.insert(QStringLiteral("blendMode"), fromView(qmx::core::toString(layer.blendMode)));
+    layerJson.insert(QStringLiteral("type"), fromView(qco::core::toString(layer.type)));
+    layerJson.insert(QStringLiteral("blendMode"), fromView(qco::core::toString(layer.blendMode)));
     layerJson.insert(QStringLiteral("visible"), layer.visible);
     layerJson.insert(QStringLiteral("locked"), layer.locked);
     layerJson.insert(QStringLiteral("opacity"), layer.opacity);
@@ -249,4 +249,4 @@ bool ProjectArchive::save(
   return writeStoredZip(filePath, entries, errorMessage);
 }
 
-}  // namespace qmx::ui
+}  // namespace qco::ui

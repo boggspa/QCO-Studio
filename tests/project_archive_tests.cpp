@@ -11,21 +11,21 @@
 
 int main()
 {
-  auto document = qmx::core::Document::create("Archive Test", {16, 16});
-  const auto layerId = document.addLayer("Pixels", qmx::core::LayerType::Raster, {16, 16});
+  auto document = qco::core::Document::create("Archive Test", {16, 16});
+  const auto layerId = document.addLayer("Pixels", qco::core::LayerType::Raster, {16, 16});
 
   QImage image(QSize(16, 16), QImage::Format_ARGB32_Premultiplied);
   image.fill(QColor(255, 0, 0, 255));
 
-  QVector<qmx::ui::ProjectRasterLayer> layers;
+  QVector<qco::ui::ProjectRasterLayer> layers;
   layers.push_back({layerId, QStringLiteral("Pixels"), image});
 
   QTemporaryDir tempDir;
   assert(tempDir.isValid());
 
-  const auto outputPath = tempDir.path() + QStringLiteral("/sample.qmxdoc");
+  const auto outputPath = tempDir.path() + QStringLiteral("/sample.qco");
   QString errorMessage;
-  const auto saved = qmx::ui::ProjectArchive::save(outputPath, document, layers, &errorMessage);
+  const auto saved = qco::ui::ProjectArchive::save(outputPath, document, layers, &errorMessage);
   assert(saved);
   assert(errorMessage.isEmpty());
 

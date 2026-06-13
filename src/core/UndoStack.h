@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace qmx::core {
+namespace qco::core {
 
 class Command {
 public:
@@ -52,4 +52,4 @@ private:
   std::size_t nextIndex_ = 0;
 };
 
-}  // namespace qmx::core
+}  // namespace qco::core

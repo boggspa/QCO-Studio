@@ -15,7 +15,7 @@ class QLabel;
 class QListWidget;
 class QDockWidget;
 
-namespace qmx::ui {
+namespace qco::ui {
 
 class MainWindow final : public QMainWindow {
   Q_OBJECT
@@ -41,7 +41,7 @@ private:
   void createToolRail();
   void createPanels();
   void createInitialDocument();
-  void setDocument(qmx::core::Document document, QVector<CanvasView::LayerImage> layers);
+  void setDocument(qco::core::Document document, QVector<CanvasView::LayerImage> layers);
   void updateLayerPanel();
   void updatePropertiesPanel();
   void updateHistoryPanel();
@@ -69,11 +69,11 @@ private:
   QAction* undoAction_ = nullptr;
   QAction* redoAction_ = nullptr;
 
-  std::unique_ptr<qmx::core::Document> document_;
+  std::unique_ptr<qco::core::Document> document_;
   QVector<CanvasView::LayerImage> layers_;
-  qmx::core::UndoStack undoStack_;
+  qco::core::UndoStack undoStack_;
   QString currentProjectPath_;
   QSettings settings_;
 };
 
-}  // namespace qmx::ui
+}  // namespace qco::ui

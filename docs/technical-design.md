@@ -1,4 +1,4 @@
-# Qimage Max Technical Design Pass
+# QCO Studio Technical Design Pass
 
 ## 1. Recommended Final Tech Stack
 
@@ -49,7 +49,7 @@ See [license-register.md](license-register.md). Phase 1 activates only Qt 6 and 
 
 ## 6. Native File Format Design
 
-Native documents use `.qmxdoc`, a ZIP-compatible package:
+Native documents use `.qco`, a ZIP-compatible package:
 
 ```text
 manifest.json
@@ -94,7 +94,7 @@ The default workspace uses a left tool rail, top context bar, center canvas, rig
 - Do not copy Photoshop, Illustrator, Lightroom, Canva, GIMP, or other product artwork, icons, UI text, panel styling, or proprietary behaviors.
 - Do not use Adobe or other third-party trademarks in product UI.
 - Keep dependency licenses and attributions current.
-- Treat the name "Qimage Max" as provisional. Existing Qimage-branded photo printing products are publicly visible, including Qimage Ultimate and Qimage One, so name clearance is required before public release.
+- Treat the name "QCO Studio" as provisional until proper legal clearance. The project moved away from Qimage-branded wording because existing Qimage photo printing products are publicly visible, including Qimage Ultimate and Qimage One.
 - Avoid GPL dependencies unless the product license strategy explicitly allows them.
 
 ## 14. Build Plan
@@ -104,7 +104,7 @@ Phase 1 uses CMake presets. The core library and tests build without Qt. The des
 ## 15. Test Plan
 
 - Core unit tests for document/layer invariants and undo stack behavior.
-- File round-trip tests for `.qmxdoc` once read support is added.
+- File round-trip tests for `.qco` once read support is added.
 - Golden image tests for renderer determinism after Skia lands.
 - UI interaction tests for canvas pan/zoom, tool gestures, dialogs, and export.
 - Performance tests for large images, many layers, tile invalidation, and cancellation.

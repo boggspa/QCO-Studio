@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <utility>
 
-namespace qmx::core {
+namespace qco::core {
 
 LambdaCommand::LambdaCommand(std::string name, Callback undoCallback, Callback redoCallback)
   : name_(std::move(name)),
@@ -104,4 +104,4 @@ std::size_t UndoStack::index() const noexcept
   return nextIndex_;
 }
 
-}  // namespace qmx::core
+}  // namespace qco::core

@@ -12,7 +12,7 @@
 #include <cstdio>
 #include <memory>
 
-namespace qmx::app {
+namespace qco::app {
 namespace {
 
 QMutex logMutex;
@@ -66,11 +66,11 @@ void messageHandler(QtMsgType type, const QMessageLogContext& context, const QSt
 void installMessageHandler()
 {
   const auto dataRoot = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
-  const auto logRoot = dataRoot.isEmpty() ? QDir::tempPath() + QStringLiteral("/QimageMax/logs")
+  const auto logRoot = dataRoot.isEmpty() ? QDir::tempPath() + QStringLiteral("/QCOStudio/logs")
                                           : dataRoot + QStringLiteral("/logs");
 
   QDir().mkpath(logRoot);
-  currentLogFilePath = logRoot + QStringLiteral("/qimagemax.log");
+  currentLogFilePath = logRoot + QStringLiteral("/qcostudio.log");
 
   auto file = std::make_unique<QFile>(currentLogFilePath);
   if (file->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
@@ -85,4 +85,4 @@ QString logFilePath()
   return currentLogFilePath;
 }
 
-}  // namespace qmx::app
+}  // namespace qco::app

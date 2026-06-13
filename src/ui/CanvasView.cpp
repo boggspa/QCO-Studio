@@ -10,7 +10,7 @@
 
 #include <algorithm>
 
-namespace qmx::ui {
+namespace qco::ui {
 
 namespace {
 
@@ -247,4 +247,4 @@ void CanvasView::drawCheckerboard(QPainter& painter, const QRectF& rect) const
   painter.fillRect(rect, QBrush(tile));
 }
 
-}  // namespace qmx::ui
+}  // namespace qco::ui

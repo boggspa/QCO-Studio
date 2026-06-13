@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace qmx::core {
+namespace qco::core {
 
 struct Size {
   int width = 0;
@@ -103,4 +103,4 @@ private:
 [[nodiscard]] std::string_view toString(LayerType type) noexcept;
 [[nodiscard]] std::string_view toString(BlendMode mode) noexcept;
 
-}  // namespace qmx::core
+}  // namespace qco::core

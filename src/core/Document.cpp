@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <utility>
 
-namespace qmx::core {
+namespace qco::core {
 
 namespace {
 
@@ -214,4 +214,4 @@ std::string_view toString(BlendMode mode) noexcept
   return "unknown";
 }
 
-}  // namespace qmx::core
+}  // namespace qco::core

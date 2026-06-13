@@ -10,7 +10,7 @@
 
 #include <cstdint>
 
-namespace qmx::ui {
+namespace qco::ui {
 
 class CanvasView final : public QWidget {
   Q_OBJECT
@@ -63,4 +63,4 @@ private:
   QPoint lastMousePosition_;
 };
 
-}  // namespace qmx::ui
+}  // namespace qco::ui

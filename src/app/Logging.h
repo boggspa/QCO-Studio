@@ -2,9 +2,9 @@
 
 #include <QString>
 
-namespace qmx::app {
+namespace qco::app {
 
 void installMessageHandler();
 QString logFilePath();
 
-}  // namespace qmx::app
+}  // namespace qco::app

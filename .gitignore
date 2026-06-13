@@ -6,6 +6,7 @@ CMakeUserPresets.json
 
 # Generated packages and exports
 dist/
+*.qco
 *.qmxdoc
 *.qmaxdoc
 

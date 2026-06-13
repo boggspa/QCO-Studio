@@ -1,6 +1,6 @@
-# Qimage Max
+# QCO Studio
 
-Qimage Max is a greenfield, legally original desktop image editor foundation. The initial target is a C++20/CMake/Qt 6 application with a clean path toward Skia rendering, OpenImageIO import/export, OpenColorIO color workflows, LibRaw RAW support, Exiv2 metadata, and an internal plugin SDK.
+QCO Studio is a greenfield, legally original desktop image editor foundation. The initial target is a C++20/CMake/Qt 6 application with a clean path toward Skia rendering, OpenImageIO import/export, OpenColorIO color workflows, LibRaw RAW support, Exiv2 metadata, and an internal plugin SDK.
 
 This repository is currently Phase 1. The app skeleton includes:
 
@@ -8,7 +8,7 @@ This repository is currently Phase 1. The app skeleton includes:
 - New document and open raster image workflows.
 - Pan and zoom canvas view with checkerboard transparency.
 - PNG/JPEG export through Qt image IO.
-- Native `.qmxdoc` project package skeleton saved as a ZIP-compatible archive.
+- Native `.qco` project package skeleton saved as a ZIP-compatible archive.
 - Core document/layer model and command undo stack.
 - Core unit tests that build without Qt.
 
@@ -50,6 +50,6 @@ The local machine has CMake, Git, and Homebrew `qtbase` installed. Both the core
 
 ## Project Notes
 
-- Product naming still needs legal clearance. Existing Qimage-branded photo-printing products are in the market, so the current repository name should be treated as provisional until reviewed.
+- Product naming still needs legal clearance before public launch. The project was renamed away from Qimage-branded wording because existing Qimage photo-printing products are in the market.
 - The UI must remain familiar to professional raster/vector users without copying Adobe, Canva, GIMP, or other product artwork, naming, icons, or exact layouts.
 - See [docs/technical-design.md](docs/technical-design.md) for the Phase 1 design pass and architecture plan.

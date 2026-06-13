@@ -8,9 +8,9 @@ namespace {
 
 void documentKeepsLayerOrder()
 {
-  auto document = qmx::core::Document::create("Test", {800, 600});
-  const auto background = document.addLayer("Background", qmx::core::LayerType::Raster, {800, 600});
-  const auto paint = document.addLayer("Paint", qmx::core::LayerType::Raster, {800, 600});
+  auto document = qco::core::Document::create("Test", {800, 600});
+  const auto background = document.addLayer("Background", qco::core::LayerType::Raster, {800, 600});
+  const auto paint = document.addLayer("Paint", qco::core::LayerType::Raster, {800, 600});
 
   assert(document.layers().size() == 2);
   assert(document.layers()[0].id == background);
@@ -24,7 +24,7 @@ void documentKeepsLayerOrder()
 
 void documentRejectsInvalidCanvasResize()
 {
-  auto document = qmx::core::Document::create("Test", {320, 240});
+  auto document = qco::core::Document::create("Test", {320, 240});
   document.resizeCanvas({0, 0});
   assert(document.canvasSize().width == 320);
   assert(document.canvasSize().height == 240);
@@ -33,9 +33,9 @@ void documentRejectsInvalidCanvasResize()
 void undoStackDropsRedoBranch()
 {
   int value = 0;
-  qmx::core::UndoStack stack;
+  qco::core::UndoStack stack;
 
-  stack.push(std::make_unique<qmx::core::LambdaCommand>(
+  stack.push(std::make_unique<qco::core::LambdaCommand>(
     "increment",
     [&value]() { --value; },
     [&value]() { ++value; }));
@@ -46,7 +46,7 @@ void undoStackDropsRedoBranch()
   assert(value == 0);
   assert(stack.canRedo());
 
-  stack.push(std::make_unique<qmx::core::LambdaCommand>(
+  stack.push(std::make_unique<qco::core::LambdaCommand>(
     "add ten",
     [&value]() { value -= 10; },
     [&value]() { value += 10; }));

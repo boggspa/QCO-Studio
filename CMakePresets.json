@@ -8,8 +8,8 @@
       "binaryDir": "${sourceDir}/build/core",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "QIMAGEMAX_BUILD_APP": "OFF",
-        "QIMAGEMAX_BUILD_TESTS": "ON"
+        "QCO_STUDIO_BUILD_APP": "OFF",
+        "QCO_STUDIO_BUILD_TESTS": "ON"
       }
     },
     {
@@ -19,8 +19,8 @@
       "binaryDir": "${sourceDir}/build/desktop",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
-        "QIMAGEMAX_BUILD_APP": "ON",
-        "QIMAGEMAX_BUILD_TESTS": "ON"
+        "QCO_STUDIO_BUILD_APP": "ON",
+        "QCO_STUDIO_BUILD_TESTS": "ON"
       }
     }
   ],
