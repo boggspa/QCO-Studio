@@ -545,6 +545,130 @@ int main(int argc, char** argv)
   }
 
   {
+    QTemporaryDir tempDir;
+    CHECK(tempDir.isValid());
+    const auto sourcePath = tempDir.filePath(QStringLiteral("milestone-source.png"));
+    const auto projectPath = tempDir.filePath(QStringLiteral("milestone-loop.qco"));
+    const auto pngExportPath = tempDir.filePath(QStringLiteral("milestone-loop.png"));
+    const auto jpegExportPath = tempDir.filePath(QStringLiteral("milestone-loop.jpg"));
+
+    CHECK(solidImage(QSize(32, 24), QColor(220, 16, 16, 255)).save(sourcePath));
+
+    std::uint64_t sourceLayerId = 0;
+    std::uint64_t overlayLayerId = 0;
+    {
+      qco::ui::MainWindow window;
+      window.resize(1024, 720);
+      window.show();
+      QApplication::processEvents();
+
+      CHECK(window.openImageFromPath(sourcePath));
+      QApplication::processEvents();
+      CHECK(window.windowTitle().contains(QLatin1Char('*')));
+
+      auto* canvas = window.findChild<qco::ui::CanvasView*>();
+      auto* addLayerAction = findAction(window, QStringLiteral("Add Raster Layer"));
+      auto* fillAction = findAction(window, QStringLiteral("Fill"));
+      auto* moveAction = findAction(window, QStringLiteral("Move"));
+      auto* layerUpButton = window.findChild<QPushButton*>(QStringLiteral("layerUpButton"));
+      auto* layerDownButton = window.findChild<QPushButton*>(QStringLiteral("layerDownButton"));
+      CHECK(canvas != nullptr);
+      CHECK(addLayerAction != nullptr);
+      CHECK(fillAction != nullptr);
+      CHECK(moveAction != nullptr);
+      CHECK(layerUpButton != nullptr);
+      CHECK(layerDownButton != nullptr);
+      CHECK(canvas->layers().size() == 1);
+
+      sourceLayerId = canvas->selectedLayerId();
+      CHECK(sourceLayerId != 0);
+
+      addLayerAction->trigger();
+      QApplication::processEvents();
+      overlayLayerId = canvas->selectedLayerId();
+      CHECK(overlayLayerId != 0);
+      CHECK(overlayLayerId != sourceLayerId);
+      CHECK(canvas->layers().size() == 2);
+      CHECK(canvas->layers().front().id == sourceLayerId);
+      CHECK(canvas->layers().back().id == overlayLayerId);
+
+      fillAction->trigger();
+      QApplication::processEvents();
+      clickCanvasDocumentPoint(*canvas, QPointF(8, 8));
+      QApplication::processEvents();
+
+      const auto* overlayLayer = findCanvasLayer(*canvas, overlayLayerId);
+      CHECK(overlayLayer != nullptr);
+      CHECK(overlayLayer->image.pixelColor(8, 8) == QColor(24, 24, 24, 255));
+
+      CHECK(layerDownButton->isEnabled());
+      layerDownButton->click();
+      QApplication::processEvents();
+      CHECK(canvas->layers().front().id == overlayLayerId);
+      CHECK(layerUpButton->isEnabled());
+      layerUpButton->click();
+      QApplication::processEvents();
+      CHECK(canvas->layers().back().id == overlayLayerId);
+
+      moveAction->trigger();
+      QApplication::processEvents();
+      dragCanvasDocumentPoint(*canvas, QPointF(8, 8), QPointF(14, 13));
+      QApplication::processEvents();
+      overlayLayer = findCanvasLayer(*canvas, overlayLayerId);
+      CHECK(overlayLayer != nullptr);
+      CHECK(overlayLayer->position == QPoint(6, 5));
+
+      CHECK(window.saveProjectToPath(projectPath));
+      QApplication::processEvents();
+      CHECK(!window.windowTitle().contains(QLatin1Char('*')));
+    }
+
+    {
+      qco::ui::MainWindow reopenedWindow;
+      reopenedWindow.resize(1024, 720);
+      reopenedWindow.show();
+      QApplication::processEvents();
+
+      CHECK(reopenedWindow.openProjectFromPath(projectPath));
+      QApplication::processEvents();
+
+      auto* reopenedCanvas = reopenedWindow.findChild<qco::ui::CanvasView*>();
+      CHECK(reopenedCanvas != nullptr);
+      CHECK(reopenedCanvas->layers().size() == 2);
+      CHECK(reopenedCanvas->layers().front().id == sourceLayerId);
+      CHECK(reopenedCanvas->layers().back().id == overlayLayerId);
+
+      const auto* reopenedSource = findCanvasLayer(*reopenedCanvas, sourceLayerId);
+      const auto* reopenedOverlay = findCanvasLayer(*reopenedCanvas, overlayLayerId);
+      CHECK(reopenedSource != nullptr);
+      CHECK(reopenedOverlay != nullptr);
+      CHECK(reopenedSource->position == QPoint(0, 0));
+      CHECK(reopenedOverlay->position == QPoint(6, 5));
+      CHECK(reopenedOverlay->image.pixelColor(8, 8) == QColor(24, 24, 24, 255));
+
+      CHECK(reopenedWindow.exportImageToPath(pngExportPath));
+      CHECK(reopenedWindow.exportImageToPath(jpegExportPath));
+      QApplication::processEvents();
+
+      const QImage exportedPng(pngExportPath);
+      CHECK(!exportedPng.isNull());
+      CHECK(exportedPng.size() == QSize(32, 24));
+      CHECK(exportedPng.pixelColor(2, 2) == QColor(220, 16, 16, 255));
+      CHECK(exportedPng.pixelColor(10, 8) == QColor(24, 24, 24, 255));
+
+      const QImage exportedJpeg(jpegExportPath);
+      CHECK(!exportedJpeg.isNull());
+      CHECK(exportedJpeg.size() == QSize(32, 24));
+      CHECK(exportedJpeg.pixelColor(2, 2).red() > 120);
+      CHECK(exportedJpeg.pixelColor(2, 2).green() < 120);
+      CHECK(exportedJpeg.pixelColor(2, 2).blue() < 120);
+      CHECK(exportedJpeg.pixelColor(10, 8).red() < 100);
+      CHECK(exportedJpeg.pixelColor(10, 8).green() < 100);
+      CHECK(exportedJpeg.pixelColor(10, 8).blue() < 100);
+    }
+  }
+
+  {
     qco::ui::MainWindow window;
     window.resize(1024, 720);
     window.show();

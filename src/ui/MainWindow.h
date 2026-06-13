@@ -35,6 +35,7 @@ class MainWindow final : public QMainWindow {
 public:
   explicit MainWindow(QWidget* parent = nullptr);
   ~MainWindow() override;
+  [[nodiscard]] bool openImageFromPath(QString path);
   [[nodiscard]] bool openProjectFromPath(QString path);
   [[nodiscard]] bool saveProjectToPath(QString path);
   [[nodiscard]] bool exportImageToPath(QString path, QString selectedFilter = QString());

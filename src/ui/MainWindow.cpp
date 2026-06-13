@@ -207,10 +207,19 @@ void MainWindow::openImage()
     return;
   }
 
+  (void)openImageFromPath(path);
+}
+
+bool MainWindow::openImageFromPath(QString path)
+{
+  if (path.isEmpty()) {
+    return false;
+  }
+
   QImage image(path);
   if (image.isNull()) {
     QMessageBox::warning(this, tr("Open Image"), tr("The selected file could not be opened as an image."));
-    return;
+    return false;
   }
 
   rememberDirectory(path);
@@ -241,6 +250,7 @@ void MainWindow::openImage()
   setDirty(true);
   updateHistoryPanel();
   statusBar()->showMessage(tr("Opened %1").arg(info.fileName()), 3000);
+  return true;
 }
 
 void MainWindow::openProject()
