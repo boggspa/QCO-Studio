@@ -37,6 +37,8 @@ if(QCO_STUDIO_BUILD_APP)
   qt_standard_project_setup()
 
   add_library(qcostudio_qt_support
+    src/image/ImageCodec.cpp
+    src/image/ImageCodec.h
     src/render/DocumentRenderer.cpp
     src/render/DocumentRenderer.h
     src/render/TileScheduler.cpp
@@ -132,6 +134,20 @@ if(QCO_STUDIO_BUILD_APP)
 
     add_test(NAME qcostudio_image_export_tests COMMAND qcostudio_image_export_tests)
     set_tests_properties(qcostudio_image_export_tests PROPERTIES TIMEOUT 30)
+
+    qt_add_executable(qcostudio_image_codec_tests
+      tests/image_codec_tests.cpp
+    )
+
+    target_link_libraries(qcostudio_image_codec_tests
+      PRIVATE
+        qcostudio_qt_support
+        Qt6::Core
+        Qt6::Gui
+    )
+
+    add_test(NAME qcostudio_image_codec_tests COMMAND qcostudio_image_codec_tests)
+    set_tests_properties(qcostudio_image_codec_tests PROPERTIES TIMEOUT 30)
 
     qt_add_executable(qcostudio_document_renderer_tests
       tests/document_renderer_tests.cpp

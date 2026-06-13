@@ -1,6 +1,7 @@
 #include "ui/MainWindow.h"
 
 #include "app/Logging.h"
+#include "image/ImageCodec.h"
 #include "render/DocumentRenderer.h"
 #include "ui/ImageExport.h"
 #include "ui/ProjectArchive.h"
@@ -22,7 +23,6 @@
 #include <QFontMetrics>
 #include <QFormLayout>
 #include <QHBoxLayout>
-#include <QImageReader>
 #include <QInputDialog>
 #include <QKeySequence>
 #include <QLabel>
@@ -55,14 +55,7 @@ constexpr int defaultDocumentHeight = 1080;
 
 [[nodiscard]] QString readableFileFilters()
 {
-  QStringList patterns;
-  const auto formats = QImageReader::supportedImageFormats();
-  for (const auto& format : formats) {
-    patterns.push_back(QStringLiteral("*.%1").arg(QString::fromLatin1(format).toLower()));
-  }
-  patterns.removeDuplicates();
-  patterns.sort();
-  return QObject::tr("Images (%1);;All files (*)").arg(patterns.join(QLatin1Char(' ')));
+  return qco::image::availableImageOpenFileFilter();
 }
 
 [[nodiscard]] QString projectFileFilter()
@@ -217,14 +210,20 @@ bool MainWindow::openImageFromPath(QString path)
     return false;
   }
 
-  QImage image(path);
-  if (image.isNull()) {
-    QMessageBox::warning(this, tr("Open Image"), tr("The selected file could not be opened as an image."));
+  const qco::image::QtImageCodec codec;
+  QString error;
+  const auto decoded = codec.read(path, &error);
+  if (!decoded.has_value()) {
+    QMessageBox::warning(
+      this,
+      tr("Open Image"),
+      tr("The selected file could not be opened as an image.\n%1").arg(error));
     return false;
   }
 
   rememberDirectory(path);
 
+  const QImage& image = decoded->image;
   const QFileInfo info(path);
   auto document = qco::core::Document::create(
     info.completeBaseName().toStdString(),
@@ -238,7 +237,7 @@ bool MainWindow::openImageFromPath(QString path)
   CanvasView::LayerImage layer;
   layer.id = layerId;
   layer.name = info.fileName();
-  layer.image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+  layer.image = image;
   layer.position = QPoint(0, 0);
 
   QVector<CanvasView::LayerImage> layers;
