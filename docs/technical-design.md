@@ -73,7 +73,7 @@ The first rendering boundary is active in `src/render`: document export now call
 
 The Qt renderer now composes through tile requests, and `TileScheduler` maps document dirty rectangles to tile rectangles. Export still asks for a full image, but the render boundary can now be driven by tile-sized invalidation work for a future interactive canvas/cache.
 
-Image import now goes through `src/image/ImageCodec` with a Qt-backed codec. OpenImageIO should replace or augment that codec boundary rather than being called directly from UI code.
+Image import and export now go through `src/image/ImageCodec` with a Qt-backed codec. OpenImageIO should replace or augment that codec boundary rather than being called directly from UI code.
 
 ## 8. Layer Model Architecture
 

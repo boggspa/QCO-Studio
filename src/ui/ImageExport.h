@@ -1,23 +1,17 @@
 #pragma once
 
-#include <QByteArray>
+#include "image/ImageCodec.h"
+
 #include <QImage>
 #include <QList>
 #include <QString>
-#include <QStringList>
 #include <QVector>
 
 #include <optional>
 
 namespace qco::ui {
 
-struct ExportImageFormat {
-  QString label;
-  QString defaultSuffix;
-  QStringList suffixes;
-  QByteArray writerFormat;
-  bool flattenToWhite = false;
-};
+using ExportImageFormat = qco::image::ImageWriteFormat;
 
 [[nodiscard]] QVector<ExportImageFormat> exportImageFormatsForWriters(const QList<QByteArray>& supportedFormats);
 [[nodiscard]] QVector<ExportImageFormat> availableExportImageFormats();
