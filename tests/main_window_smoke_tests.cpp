@@ -5,6 +5,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QColor>
 #include <QCoreApplication>
 #include <QComboBox>
 #include <QDockWidget>
@@ -95,6 +96,13 @@ void clickCanvas(qco::ui::CanvasView& canvas)
     }
   }
   return nullptr;
+}
+
+[[nodiscard]] QImage solidImage(QSize size, const QColor& color)
+{
+  QImage image(size, QImage::Format_ARGB32_Premultiplied);
+  image.fill(color);
+  return image;
 }
 
 [[nodiscard]] QPointF widgetPointForDocumentPoint(
@@ -473,6 +481,66 @@ int main(int argc, char** argv)
       CHECK(historyList->item(0) != nullptr);
       CHECK(historyList->item(0)->text().contains(QStringLiteral("No edits yet")));
     }
+  }
+
+  {
+    QTemporaryDir tempDir;
+    CHECK(tempDir.isValid());
+    const auto projectPath = tempDir.filePath(QStringLiteral("export-smoke.qco"));
+    const auto exportPath = tempDir.filePath(QStringLiteral("export-smoke.png"));
+
+    auto document = qco::core::Document::create("Export Smoke", {32, 24});
+    const auto redLayerId = document.addLayer("Red", qco::core::LayerType::Raster, {16, 16}, {0, 0});
+    const auto hiddenLayerId = document.addLayer("Hidden Green", qco::core::LayerType::Raster, {32, 24}, {0, 0});
+    const auto blueLayerId = document.addLayer("Blue", qco::core::LayerType::Raster, {8, 8}, {10, 6});
+    CHECK(document.setLayerVisibility(hiddenLayerId, false));
+
+    QVector<qco::ui::ProjectRasterLayer> projectLayers;
+    projectLayers.push_back({
+      redLayerId,
+      QStringLiteral("Red"),
+      solidImage(QSize(16, 16), QColor(255, 0, 0, 255)),
+      QPoint(0, 0),
+      true,
+      1.0,
+    });
+    projectLayers.push_back({
+      hiddenLayerId,
+      QStringLiteral("Hidden Green"),
+      solidImage(QSize(32, 24), QColor(0, 255, 0, 255)),
+      QPoint(0, 0),
+      false,
+      1.0,
+    });
+    projectLayers.push_back({
+      blueLayerId,
+      QStringLiteral("Blue"),
+      solidImage(QSize(8, 8), QColor(0, 0, 255, 255)),
+      QPoint(10, 6),
+      true,
+      1.0,
+    });
+
+    QString archiveError;
+    CHECK(qco::ui::ProjectArchive::save(projectPath, document, projectLayers, &archiveError));
+
+    qco::ui::MainWindow window;
+    window.resize(1024, 720);
+    window.show();
+    QApplication::processEvents();
+
+    CHECK(window.openProjectFromPath(projectPath));
+    QApplication::processEvents();
+    CHECK(window.exportImageToPath(exportPath));
+    QApplication::processEvents();
+    CHECK(!window.windowTitle().contains(QLatin1Char('*')));
+
+    const QImage exported(exportPath);
+    CHECK(!exported.isNull());
+    CHECK(exported.size() == QSize(32, 24));
+    CHECK(exported.pixelColor(2, 2) == QColor(255, 0, 0, 255));
+    CHECK(exported.pixelColor(12, 8) == QColor(0, 0, 255, 255));
+    CHECK(exported.pixelColor(24, 20).alpha() == 0);
   }
 
   {

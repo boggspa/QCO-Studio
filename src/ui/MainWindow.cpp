@@ -369,10 +369,28 @@ void MainWindow::exportImage()
     return;
   }
 
+  (void)exportImageToPath(path, selectedFilter);
+}
+
+bool MainWindow::exportImageToPath(QString path, QString selectedFilter)
+{
+  if (!document_) {
+    return false;
+  }
+  if (path.isEmpty()) {
+    return false;
+  }
+
+  const auto exportFormats = availableExportImageFormats();
+  if (exportFormats.isEmpty()) {
+    QMessageBox::critical(this, tr("Export Image"), tr("No supported image export formats are available."));
+    return false;
+  }
+
   const auto exportFormat = exportImageFormatForPathOrFilter(exportFormats, path, selectedFilter);
   if (!exportFormat.has_value()) {
     QMessageBox::critical(this, tr("Export Image"), tr("No supported image export format was selected."));
-    return;
+    return false;
   }
 
   path = withDefaultSuffix(path, exportFormat->defaultSuffix);
@@ -380,11 +398,12 @@ void MainWindow::exportImage()
   QString error;
   if (!writeExportImage(path, renderDocumentComposite(Qt::transparent), *exportFormat, &error)) {
     QMessageBox::critical(this, tr("Export Image"), tr("The image could not be exported:\n%1").arg(error));
-    return;
+    return false;
   }
 
   rememberDirectory(path);
   statusBar()->showMessage(tr("Exported image"), 3000);
+  return true;
 }
 
 void MainWindow::addRasterLayer()

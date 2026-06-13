@@ -37,6 +37,7 @@ public:
   ~MainWindow() override;
   [[nodiscard]] bool openProjectFromPath(QString path);
   [[nodiscard]] bool saveProjectToPath(QString path);
+  [[nodiscard]] bool exportImageToPath(QString path, QString selectedFilter = QString());
 
 private slots:
   void newDocument();
