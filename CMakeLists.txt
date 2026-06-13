@@ -37,6 +37,8 @@ if(QCO_STUDIO_BUILD_APP)
   qt_standard_project_setup()
 
   add_library(qcostudio_qt_support
+    src/image/ColorTransform.cpp
+    src/image/ColorTransform.h
     src/image/ImageCodec.cpp
     src/image/ImageCodec.h
     src/render/DocumentRenderer.cpp
@@ -148,6 +150,20 @@ if(QCO_STUDIO_BUILD_APP)
 
     add_test(NAME qcostudio_image_codec_tests COMMAND qcostudio_image_codec_tests)
     set_tests_properties(qcostudio_image_codec_tests PROPERTIES TIMEOUT 30)
+
+    qt_add_executable(qcostudio_color_transform_tests
+      tests/color_transform_tests.cpp
+    )
+
+    target_link_libraries(qcostudio_color_transform_tests
+      PRIVATE
+        qcostudio_qt_support
+        Qt6::Core
+        Qt6::Gui
+    )
+
+    add_test(NAME qcostudio_color_transform_tests COMMAND qcostudio_color_transform_tests)
+    set_tests_properties(qcostudio_color_transform_tests PROPERTIES TIMEOUT 30)
 
     qt_add_executable(qcostudio_document_renderer_tests
       tests/document_renderer_tests.cpp
