@@ -23,7 +23,7 @@
 
 ## Rendering And File Pipeline
 
-- Introduce the Skia renderer abstraction.
+- Introduce the Skia-ready renderer abstraction. The first `DocumentRenderer` boundary is in place with a Qt backend for export.
 - Add tiled rendering and dirty rectangle scheduling.
 - Add OpenImageIO, OpenColorIO/LittleCMS, LibRaw, and metadata support after license review and integration seams are ready.
 
