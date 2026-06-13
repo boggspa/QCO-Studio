@@ -12,6 +12,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSettings>
@@ -19,6 +20,7 @@
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QToolBar>
+#include <QTimer>
 
 #include <algorithm>
 #include <iostream>
@@ -80,6 +82,42 @@ void clickCanvas(qco::ui::CanvasView& canvas)
     return layer.id == id;
   });
   return it == layers.end() ? nullptr : &(*it);
+}
+
+[[nodiscard]] bool clickVisibleMessageBoxButton(QMessageBox::StandardButton button)
+{
+  auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+  if (box == nullptr) {
+    for (auto* widget : QApplication::topLevelWidgets()) {
+      box = qobject_cast<QMessageBox*>(widget);
+      if (box != nullptr && box->isVisible()) {
+        break;
+      }
+    }
+  }
+
+  if (box == nullptr) {
+    return false;
+  }
+
+  auto* buttonWidget = box->button(button);
+  if (buttonWidget == nullptr) {
+    return false;
+  }
+
+  buttonWidget->click();
+  return true;
+}
+
+void clickNextMessageBoxButton(QMessageBox::StandardButton button)
+{
+  QTimer::singleShot(0, [button]() {
+    if (!clickVisibleMessageBoxButton(button)) {
+      QTimer::singleShot(10, [button]() {
+        (void)clickVisibleMessageBoxButton(button);
+      });
+    }
+  });
 }
 
 }  // namespace
@@ -356,6 +394,55 @@ int main(int argc, char** argv)
       CHECK(historyList->item(0) != nullptr);
       CHECK(historyList->item(0)->text().contains(QStringLiteral("No edits yet")));
     }
+  }
+
+  {
+    qco::ui::MainWindow window;
+    window.resize(1024, 720);
+    window.show();
+    QApplication::processEvents();
+
+    auto* addLayerAction = window.findChild<QAction*>(QStringLiteral("addRasterLayerAction"));
+    auto* newAction = window.findChild<QAction*>(QStringLiteral("newAction"));
+    auto* openImageAction = window.findChild<QAction*>(QStringLiteral("openImageAction"));
+    auto* openProjectAction = window.findChild<QAction*>(QStringLiteral("openProjectAction"));
+    CHECK(addLayerAction != nullptr);
+    CHECK(newAction != nullptr);
+    CHECK(openImageAction != nullptr);
+    CHECK(openProjectAction != nullptr);
+
+    addLayerAction->trigger();
+    QApplication::processEvents();
+    CHECK(window.windowTitle().contains(QLatin1Char('*')));
+
+    clickNextMessageBoxButton(QMessageBox::Cancel);
+    newAction->trigger();
+    QApplication::processEvents();
+    CHECK(window.isVisible());
+    CHECK(window.windowTitle().contains(QLatin1Char('*')));
+
+    clickNextMessageBoxButton(QMessageBox::Cancel);
+    openImageAction->trigger();
+    QApplication::processEvents();
+    CHECK(window.isVisible());
+    CHECK(window.windowTitle().contains(QLatin1Char('*')));
+
+    clickNextMessageBoxButton(QMessageBox::Cancel);
+    openProjectAction->trigger();
+    QApplication::processEvents();
+    CHECK(window.isVisible());
+    CHECK(window.windowTitle().contains(QLatin1Char('*')));
+
+    clickNextMessageBoxButton(QMessageBox::Cancel);
+    CHECK(!window.close());
+    QApplication::processEvents();
+    CHECK(window.isVisible());
+    CHECK(window.windowTitle().contains(QLatin1Char('*')));
+
+    clickNextMessageBoxButton(QMessageBox::Discard);
+    CHECK(window.close());
+    QApplication::processEvents();
+    CHECK(!window.isVisible());
   }
 
   QSettings().clear();
