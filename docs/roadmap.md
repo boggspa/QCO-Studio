@@ -7,10 +7,12 @@
 - Wire undo/redo to real document actions.
 - Add raster layer creation and basic layer visibility/reorder controls.
 - Keep a small app smoke test in CI.
+- Preserve first-party document metadata in native `.qco` packages before external metadata libraries land.
 
 ## Milestone 2: Native Round Trip And Layer Basics
 
 - Preserve layered `.qco` documents with raster payloads and metadata.
+- The native archive now writes document metadata as a `metadata/document.json` sidecar and reloads it through the core document model.
 - Add duplicate, rename, reorder, visibility, opacity, and move operations.
 - Export from document state.
 - Keep undo/redo attached to all layer operations.

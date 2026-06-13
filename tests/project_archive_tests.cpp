@@ -211,6 +211,8 @@ int main(int argc, char** argv)
   QCoreApplication app(argc, argv);
 
   auto document = qco::core::Document::create("Archive Test", {64, 48});
+  document.setMetadata("camera.make", "QCO Test Camera");
+  document.setMetadata("caption", "Metadata round trip");
   const auto rasterId = document.addLayer("Pixels", qco::core::LayerType::Raster, {16, 16}, {3, 4});
   const auto textId = document.addLayer("Headline", qco::core::LayerType::Text, {32, 12}, {10, 8});
   const auto shapeId = document.addLayer("Badge", qco::core::LayerType::Shape, {24, 18}, {30, 20});
@@ -288,6 +290,9 @@ int main(int argc, char** argv)
   CHECK(bytes.startsWith(QByteArray::fromHex("504b0304")));
   CHECK(bytes.contains("manifest.json"));
   CHECK(bytes.contains("document.json"));
+  CHECK(bytes.contains("metadata/document.json"));
+  CHECK(bytes.contains("QCO Test Camera"));
+  CHECK(bytes.contains("Metadata round trip"));
   CHECK(bytes.contains("\"payload\""));
   CHECK(bytes.contains("Hello QCO"));
   CHECK(bytes.contains("ellipse"));
@@ -303,6 +308,9 @@ int main(int argc, char** argv)
   }
   CHECK(errorMessage.isEmpty());
   CHECK(loaded->document.title() == "Archive Test");
+  CHECK(loaded->document.metadata().size() == 2);
+  CHECK(loaded->document.metadata().at("camera.make") == "QCO Test Camera");
+  CHECK(loaded->document.metadata().at("caption") == "Metadata round trip");
   CHECK(loaded->document.canvasSize().width == 64);
   CHECK(loaded->document.canvasSize().height == 48);
   CHECK(loaded->document.layers().size() == 3);
