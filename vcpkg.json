@@ -4,6 +4,7 @@
   "version-string": "0.1.0",
   "description": "Cross-platform desktop image editor foundation.",
   "dependencies": [
-    "qtbase"
+    "qtbase",
+    "qtimageformats"
   ]
 }

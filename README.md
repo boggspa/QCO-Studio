@@ -7,7 +7,7 @@ This repository is currently Phase 1. The app skeleton includes:
 - Qt 6 desktop shell with main window, canvas, tool rail, layers panel, properties panel, and history placeholder.
 - New document and open raster image workflows.
 - Pan and zoom canvas view with checkerboard transparency.
-- PNG/JPEG export through Qt image IO.
+- PNG/JPEG export through Qt image IO, with TIFF/WebP enabled when Qt Image Formats plugins are installed.
 - Native `.qco` project package skeleton saved as a ZIP-compatible archive.
 - Native `.qco` project reopen for raster-backed layer packages with text/shape intent metadata.
 - Basic raster layer add, duplicate, rename, reorder, visibility, opacity, and canvas move controls.
@@ -42,14 +42,14 @@ cmake --build --preset desktop
 On macOS with Homebrew `qtbase`, use:
 
 ```sh
-brew install qtbase
+brew install qtbase qtimageformats
 cmake --preset desktop -DCMAKE_PREFIX_PATH="$(brew --prefix qtbase)"
 cmake --build --preset desktop
 ```
 
 ## Current Dependency Reality
 
-The local machine has CMake, Git, and Homebrew `qtbase` installed. Both the core-only target and the Qt desktop target have been configured, built, and tested locally.
+The local machine has CMake, Git, and Homebrew `qtbase` installed. Install Homebrew `qtimageformats` as well when testing TIFF/WebP export locally. Both the core-only target and the Qt desktop target have been configured, built, and tested locally.
 GitHub Actions runs macOS, Linux, and Windows CI.
 Desktop CI uploads unsigned macOS, Linux, and Windows app packages as workflow artifacts.
 

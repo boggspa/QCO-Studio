@@ -30,7 +30,7 @@ docs           Architecture, licensing, roadmap, legal notes
 
 ## 3. Dependency List With Licenses
 
-See [license-register.md](license-register.md). Phase 1 activates only Qt 6 and CMake. Skia, OpenImageIO, OpenColorIO, LibRaw, Exiv2, FreeType, HarfBuzz, and logging/test libraries are intentionally deferred until their integration points are real.
+See [license-register.md](license-register.md). Phase 1 activates only Qt 6, Qt Image Formats, and CMake. Skia, OpenImageIO, OpenColorIO, LibRaw, Exiv2, FreeType, HarfBuzz, and logging/test libraries are intentionally deferred until their integration points are real.
 
 ## 4. V1 Feature List
 

@@ -5,6 +5,7 @@ This register tracks intended and active dependencies. Do not add a runtime depe
 | Dependency | Status | Role | Typical license | Notes |
 | --- | --- | --- | --- | --- |
 | Qt 6 | Active in app skeleton | Desktop UI, image IO for Phase 1 | LGPL/commercial depending on distribution model | Confirm final licensing model before binary distribution. |
+| Qt Image Formats | Active in app packaging | TIFF/WebP and additional Qt image IO plugins | LGPL/commercial depending on distribution model; transitive codec licenses vary | Installed as `qtimageformats` where available. Review libtiff/libwebp and other codec notices before signed distribution. |
 | CMake | Active | Build system | BSD-3-Clause | Build-time only. |
 | vcpkg | Manifest only | Dependency acquisition | MIT | Optional; not vendored. |
 | Skia | Deferred | GPU/canvas renderer | BSD-3-Clause | Bring in after tile/render abstraction lands. |

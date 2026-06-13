@@ -1,6 +1,7 @@
 #include "ui/MainWindow.h"
 
 #include "app/Logging.h"
+#include "ui/ImageExport.h"
 #include "ui/ProjectArchive.h"
 
 #include <QAction>
@@ -341,35 +342,34 @@ void MainWindow::exportImage()
   }
 
   QString selectedFilter;
+  const auto exportFormats = availableExportImageFormats();
+  if (exportFormats.isEmpty()) {
+    QMessageBox::critical(this, tr("Export Image"), tr("No supported image export formats are available."));
+    return;
+  }
+
   auto path = QFileDialog::getSaveFileName(
     this,
     tr("Export Image"),
-    lastDirectory() + QLatin1Char('/') + documentTitle() + QStringLiteral(".png"),
-    tr("PNG Image (*.png);;JPEG Image (*.jpg *.jpeg)"),
+    lastDirectory() + QLatin1Char('/') + documentTitle() + QLatin1Char('.') + exportFormats.front().defaultSuffix,
+    exportImageFileFilter(exportFormats),
     &selectedFilter);
 
   if (path.isEmpty()) {
     return;
   }
 
-  const auto wantsJpeg = selectedFilter.contains(QStringLiteral("JPEG"), Qt::CaseInsensitive)
-                         || QFileInfo(path).suffix().compare(QStringLiteral("jpg"), Qt::CaseInsensitive) == 0
-                         || QFileInfo(path).suffix().compare(QStringLiteral("jpeg"), Qt::CaseInsensitive) == 0;
-
-  path = withDefaultSuffix(path, wantsJpeg ? QStringLiteral("jpg") : QStringLiteral("png"));
-
-  QImage output = renderDocumentComposite(Qt::transparent);
-  if (wantsJpeg) {
-    QImage flattened(output.size(), QImage::Format_RGB32);
-    flattened.fill(Qt::white);
-    QPainter painter(&flattened);
-    painter.drawImage(QPoint(0, 0), output);
-    painter.end();
-    output = flattened;
+  const auto exportFormat = exportImageFormatForPathOrFilter(exportFormats, path, selectedFilter);
+  if (!exportFormat.has_value()) {
+    QMessageBox::critical(this, tr("Export Image"), tr("No supported image export format was selected."));
+    return;
   }
 
-  if (!output.save(path)) {
-    QMessageBox::critical(this, tr("Export Image"), tr("The image could not be exported."));
+  path = withDefaultSuffix(path, exportFormat->defaultSuffix);
+
+  QString error;
+  if (!writeExportImage(path, renderDocumentComposite(Qt::transparent), *exportFormat, &error)) {
+    QMessageBox::critical(this, tr("Export Image"), tr("The image could not be exported:\n%1").arg(error));
     return;
   }
 

@@ -37,6 +37,8 @@ if(QCO_STUDIO_BUILD_APP)
   qt_standard_project_setup()
 
   add_library(qcostudio_qt_support
+    src/ui/ImageExport.cpp
+    src/ui/ImageExport.h
     src/ui/ProjectArchive.cpp
     src/ui/ProjectArchive.h
   )
@@ -112,6 +114,20 @@ if(QCO_STUDIO_BUILD_APP)
 
     add_test(NAME qcostudio_project_archive_tests COMMAND qcostudio_project_archive_tests)
     set_tests_properties(qcostudio_project_archive_tests PROPERTIES TIMEOUT 30)
+
+    qt_add_executable(qcostudio_image_export_tests
+      tests/image_export_tests.cpp
+    )
+
+    target_link_libraries(qcostudio_image_export_tests
+      PRIVATE
+        qcostudio_qt_support
+        Qt6::Core
+        Qt6::Gui
+    )
+
+    add_test(NAME qcostudio_image_export_tests COMMAND qcostudio_image_export_tests)
+    set_tests_properties(qcostudio_image_export_tests PROPERTIES TIMEOUT 30)
 
     qt_add_executable(qcostudio_canvas_smoke_tests
       tests/canvas_smoke_tests.cpp
