@@ -44,6 +44,7 @@ private slots:
   void exportImage();
   void addRasterLayer();
   void duplicateSelectedLayer();
+  void deleteSelectedLayer();
   void renameSelectedLayer();
   void toggleSelectedLayerLock();
   void moveSelectedLayerUp();
@@ -156,6 +157,7 @@ private:
   QActionGroup* toolActionGroup_ = nullptr;
   QPushButton* addLayerButton_ = nullptr;
   QPushButton* duplicateLayerButton_ = nullptr;
+  QPushButton* deleteLayerButton_ = nullptr;
   QPushButton* renameLayerButton_ = nullptr;
   QPushButton* lockLayerButton_ = nullptr;
   QPushButton* layerUpButton_ = nullptr;
@@ -168,6 +170,7 @@ private:
   QAction* exportAction_ = nullptr;
   QAction* addRasterLayerAction_ = nullptr;
   QAction* duplicateLayerAction_ = nullptr;
+  QAction* deleteLayerAction_ = nullptr;
   QAction* renameLayerAction_ = nullptr;
   QAction* toggleLayerLockAction_ = nullptr;
   QAction* layerUpAction_ = nullptr;

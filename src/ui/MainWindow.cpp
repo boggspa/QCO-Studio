@@ -441,6 +441,46 @@ void MainWindow::duplicateSelectedLayer()
   pushStateCommand(tr("Duplicate Layer"), std::move(before), captureState());
 }
 
+void MainWindow::deleteSelectedLayer()
+{
+  const auto* layer = selectedLayer();
+  if (!document_ || selectedLayerId_ == 0 || layer == nullptr) {
+    return;
+  }
+  if (layer->locked) {
+    statusBar()->showMessage(tr("Unlock the layer before deleting it"), 3000);
+    return;
+  }
+
+  const auto currentIndex = document_->layerIndex(selectedLayerId_);
+  if (!currentIndex.has_value()) {
+    return;
+  }
+
+  const auto deletedLayerId = selectedLayerId_;
+  auto before = captureState();
+  if (!document_->removeLayer(deletedLayerId)) {
+    return;
+  }
+
+  layers_.erase(
+    std::remove_if(layers_.begin(), layers_.end(), [deletedLayerId](const CanvasView::LayerImage& imageLayer) {
+      return imageLayer.id == deletedLayerId;
+    }),
+    layers_.end());
+
+  if (document_->layers().empty()) {
+    selectedLayerId_ = 0;
+  } else {
+    const auto nextIndex = std::min(*currentIndex, document_->layers().size() - 1);
+    selectedLayerId_ = document_->layers()[nextIndex].id;
+  }
+  pendingMoveBeforeState_.reset();
+  pendingRasterEditBeforeState_.reset();
+
+  pushStateCommand(tr("Delete Layer"), std::move(before), captureState());
+}
+
 void MainWindow::renameSelectedLayer()
 {
   const auto* layer = selectedLayer();
@@ -931,6 +971,11 @@ void MainWindow::createActions()
   duplicateLayerAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_J));
   connect(duplicateLayerAction_, &QAction::triggered, this, &MainWindow::duplicateSelectedLayer);
 
+  deleteLayerAction_ = new QAction(tr("Delete Layer"), this);
+  deleteLayerAction_->setObjectName(QStringLiteral("deleteLayerAction"));
+  deleteLayerAction_->setShortcut(QKeySequence::Delete);
+  connect(deleteLayerAction_, &QAction::triggered, this, &MainWindow::deleteSelectedLayer);
+
   renameLayerAction_ = new QAction(tr("Rename Layer"), this);
   renameLayerAction_->setObjectName(QStringLiteral("renameLayerAction"));
   connect(renameLayerAction_, &QAction::triggered, this, &MainWindow::renameSelectedLayer);
@@ -989,6 +1034,7 @@ void MainWindow::createMenus()
   auto* layerMenu = menuBar()->addMenu(tr("Layer"));
   layerMenu->addAction(addRasterLayerAction_);
   layerMenu->addAction(duplicateLayerAction_);
+  layerMenu->addAction(deleteLayerAction_);
   layerMenu->addAction(renameLayerAction_);
   layerMenu->addAction(toggleLayerLockAction_);
   layerMenu->addSeparator();
@@ -1052,18 +1098,21 @@ void MainWindow::createPanels()
   auto* buttonRow = new QHBoxLayout();
   addLayerButton_ = new QPushButton(tr("Add"), layersPanel);
   duplicateLayerButton_ = new QPushButton(tr("Duplicate"), layersPanel);
+  deleteLayerButton_ = new QPushButton(tr("Delete"), layersPanel);
   renameLayerButton_ = new QPushButton(tr("Rename"), layersPanel);
   lockLayerButton_ = new QPushButton(tr("Lock"), layersPanel);
   layerUpButton_ = new QPushButton(tr("Up"), layersPanel);
   layerDownButton_ = new QPushButton(tr("Down"), layersPanel);
   addLayerButton_->setObjectName(QStringLiteral("addLayerButton"));
   duplicateLayerButton_->setObjectName(QStringLiteral("duplicateLayerButton"));
+  deleteLayerButton_->setObjectName(QStringLiteral("deleteLayerButton"));
   renameLayerButton_->setObjectName(QStringLiteral("renameLayerButton"));
   lockLayerButton_->setObjectName(QStringLiteral("toggleLayerLockButton"));
   layerUpButton_->setObjectName(QStringLiteral("layerUpButton"));
   layerDownButton_->setObjectName(QStringLiteral("layerDownButton"));
   buttonRow->addWidget(addLayerButton_);
   buttonRow->addWidget(duplicateLayerButton_);
+  buttonRow->addWidget(deleteLayerButton_);
   buttonRow->addWidget(renameLayerButton_);
   buttonRow->addWidget(lockLayerButton_);
   buttonRow->addWidget(layerUpButton_);
@@ -1085,6 +1134,7 @@ void MainWindow::createPanels()
   connect(layersList_, &QListWidget::itemChanged, this, &MainWindow::layerItemChanged);
   connect(addLayerButton_, &QPushButton::clicked, this, &MainWindow::addRasterLayer);
   connect(duplicateLayerButton_, &QPushButton::clicked, this, &MainWindow::duplicateSelectedLayer);
+  connect(deleteLayerButton_, &QPushButton::clicked, this, &MainWindow::deleteSelectedLayer);
   connect(renameLayerButton_, &QPushButton::clicked, this, &MainWindow::renameSelectedLayer);
   connect(lockLayerButton_, &QPushButton::clicked, this, &MainWindow::toggleSelectedLayerLock);
   connect(layerUpButton_, &QPushButton::clicked, this, &MainWindow::moveSelectedLayerUp);
@@ -1391,6 +1441,7 @@ void MainWindow::updateActions()
   exportAction_->setEnabled(hasDocument);
   addRasterLayerAction_->setEnabled(hasDocument);
   duplicateLayerAction_->setEnabled(hasSelectedLayer);
+  deleteLayerAction_->setEnabled(hasSelectedLayer && !selectedLayerLocked);
   renameLayerAction_->setEnabled(hasSelectedLayer);
   toggleLayerLockAction_->setEnabled(hasSelectedLayer);
   toggleLayerLockAction_->setText(selectedLayerLocked ? tr("Unlock Layer") : tr("Lock Layer"));
@@ -1403,6 +1454,7 @@ void MainWindow::updateActions()
 
   if (duplicateLayerButton_ != nullptr) {
     duplicateLayerButton_->setEnabled(hasSelectedLayer);
+    deleteLayerButton_->setEnabled(deleteLayerAction_->isEnabled());
     renameLayerButton_->setEnabled(hasSelectedLayer);
     lockLayerButton_->setEnabled(hasSelectedLayer);
     lockLayerButton_->setText(selectedLayerLocked ? tr("Unlock") : tr("Lock"));

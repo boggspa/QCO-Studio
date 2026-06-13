@@ -131,13 +131,17 @@ int main(int argc, char** argv)
 
     CHECK(!window.windowTitle().contains(QLatin1Char('*')));
     auto* addLayerAction = findAction(window, QStringLiteral("Add Raster Layer"));
+    auto* deleteLayerAction = window.findChild<QAction*>(QStringLiteral("deleteLayerAction"));
     auto* undoAction = window.findChild<QAction*>(QStringLiteral("undoAction"));
     auto* textAction = findAction(window, QStringLiteral("Text"));
     auto* shapeAction = findAction(window, QStringLiteral("Shape"));
+    auto* historyList = window.findChild<QListWidget*>(QStringLiteral("historyList"));
     CHECK(addLayerAction != nullptr);
+    CHECK(deleteLayerAction != nullptr);
     CHECK(undoAction != nullptr);
     CHECK(textAction != nullptr);
     CHECK(shapeAction != nullptr);
+    CHECK(historyList != nullptr);
     auto* lockLayerButton = window.findChild<QPushButton*>(QStringLiteral("toggleLayerLockButton"));
     auto* propertiesLabel = window.findChild<QLabel*>(QStringLiteral("propertiesLabel"));
     CHECK(lockLayerButton != nullptr);
@@ -146,18 +150,32 @@ int main(int argc, char** argv)
     addLayerAction->trigger();
     QApplication::processEvents();
     CHECK(window.windowTitle().contains(QLatin1Char('*')));
+    const auto rasterLayerId = canvas->selectedLayerId();
+    CHECK(findCanvasLayer(*canvas, rasterLayerId) != nullptr);
     CHECK(lockLayerButton->isEnabled());
     CHECK(lockLayerButton->text() == QStringLiteral("Lock"));
 
     lockLayerButton->click();
     QApplication::processEvents();
     CHECK(lockLayerButton->text() == QStringLiteral("Unlock"));
+    CHECK(!deleteLayerAction->isEnabled());
     CHECK(propertiesLabel->text().contains(QStringLiteral("Locked")));
 
     undoAction->trigger();
     QApplication::processEvents();
     CHECK(lockLayerButton->text() == QStringLiteral("Lock"));
+    CHECK(deleteLayerAction->isEnabled());
     CHECK(propertiesLabel->text().contains(QStringLiteral("Unlocked")));
+
+    deleteLayerAction->trigger();
+    QApplication::processEvents();
+    CHECK(findCanvasLayer(*canvas, rasterLayerId) == nullptr);
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Delete Layer")));
+
+    undoAction->trigger();
+    QApplication::processEvents();
+    CHECK(findCanvasLayer(*canvas, rasterLayerId) != nullptr);
 
     undoAction->trigger();
     QApplication::processEvents();
@@ -166,7 +184,6 @@ int main(int argc, char** argv)
     auto* textContentInput = window.findChild<QLineEdit*>(QStringLiteral("textContentInput"));
     auto* textSizeInput = window.findChild<QSpinBox*>(QStringLiteral("textSizeInput"));
     auto* updateTextLayerButton = window.findChild<QPushButton*>(QStringLiteral("updateTextLayerButton"));
-    auto* historyList = window.findChild<QListWidget*>(QStringLiteral("historyList"));
     auto* shapeTypeInput = window.findChild<QComboBox*>(QStringLiteral("shapeTypeInput"));
     auto* shapeWidthInput = window.findChild<QSpinBox*>(QStringLiteral("shapeWidthInput"));
     auto* shapeHeightInput = window.findChild<QSpinBox*>(QStringLiteral("shapeHeightInput"));
@@ -174,7 +191,6 @@ int main(int argc, char** argv)
     CHECK(textContentInput != nullptr);
     CHECK(textSizeInput != nullptr);
     CHECK(updateTextLayerButton != nullptr);
-    CHECK(historyList != nullptr);
     CHECK(shapeTypeInput != nullptr);
     CHECK(shapeWidthInput != nullptr);
     CHECK(shapeHeightInput != nullptr);
