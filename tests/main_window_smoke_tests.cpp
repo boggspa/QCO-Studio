@@ -1,6 +1,7 @@
 #include "app/Logging.h"
 #include "ui/CanvasView.h"
 #include "ui/MainWindow.h"
+#include "ui/ProjectArchive.h"
 
 #include <QAction>
 #include <QApplication>
@@ -133,6 +134,29 @@ void dragCanvasDocumentPoint(qco::ui::CanvasView& canvas, QPointF fromDocumentPo
     QEvent::MouseButtonRelease,
     to,
     to,
+    Qt::LeftButton,
+    Qt::NoButton,
+    Qt::NoModifier);
+  QApplication::sendEvent(&canvas, &release);
+}
+
+void clickCanvasDocumentPoint(qco::ui::CanvasView& canvas, QPointF documentPoint)
+{
+  const QPointF position = widgetPointForDocumentPoint(canvas, documentPoint);
+
+  QMouseEvent press(
+    QEvent::MouseButtonPress,
+    position,
+    position,
+    Qt::LeftButton,
+    Qt::LeftButton,
+    Qt::NoModifier);
+  QApplication::sendEvent(&canvas, &press);
+
+  QMouseEvent release(
+    QEvent::MouseButtonRelease,
+    position,
+    position,
     Qt::LeftButton,
     Qt::NoButton,
     Qt::NoModifier);
@@ -596,6 +620,139 @@ int main(int argc, char** argv)
     duplicateLayer = findCanvasLayer(*canvas, duplicateLayerId);
     CHECK(duplicateLayer != nullptr);
     CHECK(duplicateLayer->position == beforeMovePosition + QPoint(32, 28));
+  }
+
+  {
+    QTemporaryDir tempDir;
+    CHECK(tempDir.isValid());
+    const auto projectPath = tempDir.filePath(QStringLiteral("tool-smoke.qco"));
+
+    auto document = qco::core::Document::create("Tool Smoke", {96, 64});
+    const auto rasterLayerId = document.addLayer("Tool Pixels", qco::core::LayerType::Raster, {96, 64});
+    QImage image(QSize(96, 64), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+
+    QVector<qco::ui::ProjectRasterLayer> projectLayers;
+    projectLayers.push_back({
+      rasterLayerId,
+      QStringLiteral("Tool Pixels"),
+      image,
+      QPoint(0, 0),
+      true,
+      1.0,
+    });
+
+    QString archiveError;
+    CHECK(qco::ui::ProjectArchive::save(projectPath, document, projectLayers, &archiveError));
+
+    qco::ui::MainWindow window;
+    window.resize(1024, 720);
+    window.show();
+    QApplication::processEvents();
+
+    CHECK(window.openProjectFromPath(projectPath));
+    QApplication::processEvents();
+
+    auto* canvas = window.findChild<qco::ui::CanvasView*>();
+    auto* historyList = window.findChild<QListWidget*>(QStringLiteral("historyList"));
+    auto* brushAction = findAction(window, QStringLiteral("Brush"));
+    auto* fillAction = findAction(window, QStringLiteral("Fill"));
+    auto* eraseAction = findAction(window, QStringLiteral("Erase"));
+    auto* cropAction = findAction(window, QStringLiteral("Crop"));
+    auto* brushSizeInput = window.findChild<QSpinBox*>(QStringLiteral("brushSizeInput"));
+    auto* eraserSizeInput = window.findChild<QSpinBox*>(QStringLiteral("eraserSizeInput"));
+    auto* undoAction = window.findChild<QAction*>(QStringLiteral("undoAction"));
+    auto* redoAction = window.findChild<QAction*>(QStringLiteral("redoAction"));
+    CHECK(canvas != nullptr);
+    CHECK(historyList != nullptr);
+    CHECK(brushAction != nullptr);
+    CHECK(fillAction != nullptr);
+    CHECK(eraseAction != nullptr);
+    CHECK(cropAction != nullptr);
+    CHECK(brushSizeInput != nullptr);
+    CHECK(eraserSizeInput != nullptr);
+    CHECK(undoAction != nullptr);
+    CHECK(redoAction != nullptr);
+    CHECK(canvas->documentSize() == QSize(96, 64));
+    CHECK(findCanvasLayer(*canvas, rasterLayerId) != nullptr);
+    CHECK(!window.windowTitle().contains(QLatin1Char('*')));
+
+    brushSizeInput->setValue(6);
+    brushAction->trigger();
+    QApplication::processEvents();
+    CHECK(canvas->activeTool() == qco::ui::CanvasView::Tool::Brush);
+    dragCanvasDocumentPoint(*canvas, QPointF(20, 20), QPointF(40, 20));
+    QApplication::processEvents();
+
+    auto* rasterLayer = findCanvasLayer(*canvas, rasterLayerId);
+    CHECK(rasterLayer != nullptr);
+    CHECK(rasterLayer->image.pixelColor(30, 20).alpha() > 200);
+    CHECK(rasterLayer->image.pixelColor(30, 20).red() < 64);
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Brush Stroke")));
+
+    fillAction->trigger();
+    QApplication::processEvents();
+    CHECK(canvas->activeTool() == qco::ui::CanvasView::Tool::Fill);
+    clickCanvasDocumentPoint(*canvas, QPointF(80, 50));
+    QApplication::processEvents();
+
+    rasterLayer = findCanvasLayer(*canvas, rasterLayerId);
+    CHECK(rasterLayer != nullptr);
+    CHECK(rasterLayer->image.pixelColor(80, 50).alpha() > 200);
+    CHECK(rasterLayer->image.pixelColor(80, 50).red() < 64);
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Fill Layer Region")));
+
+    eraserSizeInput->setValue(8);
+    eraseAction->trigger();
+    QApplication::processEvents();
+    CHECK(canvas->activeTool() == qco::ui::CanvasView::Tool::Eraser);
+    dragCanvasDocumentPoint(*canvas, QPointF(80, 50), QPointF(84, 50));
+    QApplication::processEvents();
+
+    rasterLayer = findCanvasLayer(*canvas, rasterLayerId);
+    CHECK(rasterLayer != nullptr);
+    CHECK(rasterLayer->image.pixelColor(80, 50).alpha() == 0);
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Erase Stroke")));
+
+    undoAction->trigger();
+    QApplication::processEvents();
+    rasterLayer = findCanvasLayer(*canvas, rasterLayerId);
+    CHECK(rasterLayer != nullptr);
+    CHECK(rasterLayer->image.pixelColor(80, 50).alpha() > 200);
+    redoAction->trigger();
+    QApplication::processEvents();
+    rasterLayer = findCanvasLayer(*canvas, rasterLayerId);
+    CHECK(rasterLayer != nullptr);
+    CHECK(rasterLayer->image.pixelColor(80, 50).alpha() == 0);
+
+    cropAction->trigger();
+    QApplication::processEvents();
+    CHECK(canvas->activeTool() == qco::ui::CanvasView::Tool::Crop);
+    dragCanvasDocumentPoint(*canvas, QPointF(10, 8), QPointF(70, 48));
+    QApplication::processEvents();
+
+    rasterLayer = findCanvasLayer(*canvas, rasterLayerId);
+    CHECK(rasterLayer != nullptr);
+    CHECK(canvas->documentSize() == QSize(60, 40));
+    CHECK(rasterLayer->position == QPoint(-10, -8));
+    CHECK(historyList->item(0) != nullptr);
+    CHECK(historyList->item(0)->text().contains(QStringLiteral("Crop Canvas")));
+
+    undoAction->trigger();
+    QApplication::processEvents();
+    rasterLayer = findCanvasLayer(*canvas, rasterLayerId);
+    CHECK(rasterLayer != nullptr);
+    CHECK(canvas->documentSize() == QSize(96, 64));
+    CHECK(rasterLayer->position == QPoint(0, 0));
+    redoAction->trigger();
+    QApplication::processEvents();
+    rasterLayer = findCanvasLayer(*canvas, rasterLayerId);
+    CHECK(rasterLayer != nullptr);
+    CHECK(canvas->documentSize() == QSize(60, 40));
+    CHECK(rasterLayer->position == QPoint(-10, -8));
   }
 
   {
