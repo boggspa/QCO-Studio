@@ -13,6 +13,7 @@
 
 - Preserve layered `.qco` documents with raster payloads and metadata.
 - The native archive now writes document metadata as a `metadata/document.json` sidecar and reloads it through the core document model.
+- Image open now imports first-party JSON sidecar metadata into the document model without linking Exiv2.
 - Add duplicate, rename, reorder, visibility, opacity, and move operations.
 - Export from document state.
 - Keep undo/redo attached to all layer operations.

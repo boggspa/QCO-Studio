@@ -1,4 +1,5 @@
 #include "app/Logging.h"
+#include "image/MetadataProvider.h"
 #include "ui/CanvasView.h"
 #include "ui/MainWindow.h"
 #include "ui/ProjectArchive.h"
@@ -553,6 +554,13 @@ int main(int argc, char** argv)
     const auto jpegExportPath = tempDir.filePath(QStringLiteral("milestone-loop.jpg"));
 
     CHECK(solidImage(QSize(32, 24), QColor(220, 16, 16, 255)).save(sourcePath));
+    qco::core::MetadataMap sourceMetadata;
+    sourceMetadata["caption"] = "Milestone sidecar";
+    sourceMetadata["rating"] = "5";
+    const qco::image::JsonSidecarMetadataProvider metadataProvider;
+    QString metadataError;
+    CHECK(metadataProvider.writeForImage(sourcePath, sourceMetadata, &metadataError));
+    CHECK(metadataError.isEmpty());
 
     std::uint64_t sourceLayerId = 0;
     std::uint64_t overlayLayerId = 0;
@@ -622,6 +630,14 @@ int main(int argc, char** argv)
       QApplication::processEvents();
       CHECK(!window.windowTitle().contains(QLatin1Char('*')));
     }
+
+    QString archiveError;
+    const auto savedProject = qco::ui::ProjectArchive::load(projectPath, &archiveError);
+    CHECK(savedProject.has_value());
+    CHECK(archiveError.isEmpty());
+    CHECK(savedProject->document.metadata().size() == 2);
+    CHECK(savedProject->document.metadata().at("caption") == "Milestone sidecar");
+    CHECK(savedProject->document.metadata().at("rating") == "5");
 
     {
       qco::ui::MainWindow reopenedWindow;

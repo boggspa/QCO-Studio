@@ -67,6 +67,8 @@ The format must preserve layer structure, masks, editable text, vectors, adjustm
 
 Native document metadata now lives on the core `Document` as first-party key/value strings and is written into `.qco` packages as `metadata/document.json`. This keeps project metadata round-tripping without linking a GPL-risk metadata library and leaves EXIF/IPTC/XMP ingestion to a later reviewed adapter.
 
+Image-level metadata starts with `src/image/MetadataProvider`: the default provider reads and writes first-party JSON sidecars named `image.ext.qco-meta.json`. Opening an image imports that sidecar metadata into the document model, where `.qco` save/reopen preserves it. Exiv2 remains blocked for default linked use; future EXIF/IPTC/XMP adapters should implement the metadata provider boundary after license review.
+
 ## 7. Canvas And Rendering Architecture
 
 The long-term canvas is an infinite pasteboard around fixed document bounds. Rendering should run through a tile renderer, dirty rectangle scheduler, layer compositor, mask/vector/text renderers, and GPU abstraction. Phase 1 uses a Qt `QWidget` canvas with checkerboard, document bounds, pan/zoom, and raster layer drawing so UI workflows can progress before Skia lands.

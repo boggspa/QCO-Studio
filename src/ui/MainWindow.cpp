@@ -2,6 +2,7 @@
 
 #include "app/Logging.h"
 #include "image/ImageCodec.h"
+#include "image/MetadataProvider.h"
 #include "render/DocumentRenderer.h"
 #include "ui/ImageExport.h"
 #include "ui/ProjectArchive.h"
@@ -229,6 +230,15 @@ bool MainWindow::openImageFromPath(QString path)
     info.completeBaseName().toStdString(),
     toCoreSize(image.size()));
 
+  const qco::image::JsonSidecarMetadataProvider metadataProvider;
+  QString metadataError;
+  const auto metadata = metadataProvider.readForImage(path, &metadataError);
+  if (metadata.has_value()) {
+    for (const auto& [key, value] : *metadata) {
+      document.setMetadata(key, value);
+    }
+  }
+
   const auto layerId = document.addLayer(
     info.fileName().toStdString(),
     qco::core::LayerType::Raster,
@@ -249,7 +259,11 @@ bool MainWindow::openImageFromPath(QString path)
   cleanUndoIndex_.reset();
   setDirty(true);
   updateHistoryPanel();
-  statusBar()->showMessage(tr("Opened %1").arg(info.fileName()), 3000);
+  if (metadataError.isEmpty()) {
+    statusBar()->showMessage(tr("Opened %1").arg(info.fileName()), 3000);
+  } else {
+    statusBar()->showMessage(tr("Opened %1; metadata sidecar ignored").arg(info.fileName()), 5000);
+  }
   return true;
 }
 
