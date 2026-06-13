@@ -25,6 +25,7 @@
 
 - Introduce the Skia-ready renderer abstraction. The first `DocumentRenderer` boundary is in place with a Qt backend for export.
 - Add tiled rendering and dirty rectangle scheduling. The Qt renderer now composes full exports from render tiles, and `TileScheduler` can map dirty rectangles to tile work.
+- Keep the dependency license/adoption review current before enabling OpenImageIO, OpenColorIO/LittleCMS, LibRaw, or metadata libraries.
 - Add OpenImageIO, OpenColorIO/LittleCMS, LibRaw, and metadata support after license review and integration seams are ready.
 
 ## Collaboration
