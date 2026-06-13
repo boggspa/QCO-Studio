@@ -27,6 +27,7 @@
 - Add tiled rendering and dirty rectangle scheduling. The Qt renderer now composes full exports from render tiles, and `TileScheduler` can map dirty rectangles to tile work.
 - Keep the dependency license/adoption review current before enabling OpenImageIO, OpenColorIO/LittleCMS, LibRaw, or metadata libraries.
 - Introduce the image codec boundary before OpenImageIO. The first Qt-backed `ImageCodec` now owns open-image reads and export writes so future OIIO integration does not leak into UI code.
+- Introduce the color transform boundary before OpenColorIO/LittleCMS. The first Qt-backed `ColorTransform` now owns profile tagging and color-space conversion tests.
 - Add OpenImageIO, OpenColorIO/LittleCMS, LibRaw, and metadata support after license review and integration seams are ready.
 
 ## Collaboration

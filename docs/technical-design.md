@@ -75,6 +75,8 @@ The Qt renderer now composes through tile requests, and `TileScheduler` maps doc
 
 Image import and export now go through `src/image/ImageCodec` with a Qt-backed codec. OpenImageIO should replace or augment that codec boundary rather than being called directly from UI code.
 
+Color profile tagging and conversion now go through `src/image/ColorTransform` with a Qt-backed implementation. OpenColorIO and LittleCMS should replace or augment that transform boundary rather than being called directly from UI or export code.
+
 ## 8. Layer Model Architecture
 
 Layers have stable ids, names, type, visibility, lock state, opacity, blend mode, bounds, and type-specific payload references. The core model owns ordering and metadata; renderer/image modules own pixel payloads. Groups and masks should be explicit graph relationships rather than hidden UI-only nesting.
