@@ -17,6 +17,7 @@
 #include <QSettings>
 #include <QSpinBox>
 #include <QStringList>
+#include <QTemporaryDir>
 #include <QToolBar>
 
 #include <algorithm>
@@ -290,6 +291,71 @@ int main(int argc, char** argv)
     CHECK(screenshot.height() > 0);
 
     window.close();
+  }
+
+  {
+    QTemporaryDir tempDir;
+    CHECK(tempDir.isValid());
+    const auto projectPath = tempDir.filePath(QStringLiteral("app-roundtrip.qco"));
+
+    std::uint64_t textLayerId = 0;
+    std::uint64_t shapeLayerId = 0;
+    {
+      qco::ui::MainWindow window;
+      window.resize(1024, 720);
+      window.show();
+      QApplication::processEvents();
+
+      auto* canvas = window.findChild<qco::ui::CanvasView*>();
+      auto* textAction = findAction(window, QStringLiteral("Text"));
+      auto* shapeAction = findAction(window, QStringLiteral("Shape"));
+      auto* textContentInput = window.findChild<QLineEdit*>(QStringLiteral("textContentInput"));
+      CHECK(canvas != nullptr);
+      CHECK(textAction != nullptr);
+      CHECK(shapeAction != nullptr);
+      CHECK(textContentInput != nullptr);
+
+      textContentInput->setText(QStringLiteral("Saved Text"));
+      textAction->trigger();
+      clickCanvas(*canvas);
+      QApplication::processEvents();
+      textLayerId = canvas->selectedLayerId();
+      CHECK(findCanvasLayer(*canvas, textLayerId) != nullptr);
+
+      shapeAction->trigger();
+      clickCanvas(*canvas);
+      QApplication::processEvents();
+      shapeLayerId = canvas->selectedLayerId();
+      CHECK(findCanvasLayer(*canvas, shapeLayerId) != nullptr);
+
+      CHECK(window.saveProjectToPath(projectPath));
+      QApplication::processEvents();
+      CHECK(!window.windowTitle().contains(QLatin1Char('*')));
+    }
+
+    {
+      qco::ui::MainWindow reopenedWindow;
+      reopenedWindow.resize(1024, 720);
+      reopenedWindow.show();
+      QApplication::processEvents();
+
+      CHECK(reopenedWindow.openProjectFromPath(projectPath));
+      QApplication::processEvents();
+      auto* reopenedCanvas = reopenedWindow.findChild<qco::ui::CanvasView*>();
+      auto* historyList = reopenedWindow.findChild<QListWidget*>(QStringLiteral("historyList"));
+      CHECK(reopenedCanvas != nullptr);
+      CHECK(historyList != nullptr);
+
+      const auto* textLayer = findCanvasLayer(*reopenedCanvas, textLayerId);
+      const auto* shapeLayer = findCanvasLayer(*reopenedCanvas, shapeLayerId);
+      CHECK(textLayer != nullptr);
+      CHECK(shapeLayer != nullptr);
+      CHECK(textLayer->name == QStringLiteral("Saved Text"));
+      CHECK(shapeLayer->name == QStringLiteral("Rectangle"));
+      CHECK(!reopenedWindow.windowTitle().contains(QLatin1Char('*')));
+      CHECK(historyList->item(0) != nullptr);
+      CHECK(historyList->item(0)->text().contains(QStringLiteral("No edits yet")));
+    }
   }
 
   QSettings().clear();

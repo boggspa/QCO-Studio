@@ -35,6 +35,8 @@ class MainWindow final : public QMainWindow {
 public:
   explicit MainWindow(QWidget* parent = nullptr);
   ~MainWindow() override;
+  [[nodiscard]] bool openProjectFromPath(QString path);
+  [[nodiscard]] bool saveProjectToPath(QString path);
 
 private slots:
   void newDocument();
@@ -117,7 +119,6 @@ private:
   void rememberDirectory(const QString& filePath);
 
   [[nodiscard]] bool maybeSaveChanges();
-  [[nodiscard]] bool saveProjectToPath(QString path);
   [[nodiscard]] DocumentState captureState() const;
   [[nodiscard]] qco::core::Layer* selectedLayer() noexcept;
   [[nodiscard]] const qco::core::Layer* selectedLayer() const noexcept;

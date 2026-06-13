@@ -259,11 +259,20 @@ void MainWindow::openProject()
     return;
   }
 
+  (void)openProjectFromPath(path);
+}
+
+bool MainWindow::openProjectFromPath(QString path)
+{
+  if (path.isEmpty()) {
+    return false;
+  }
+
   QString error;
   auto loadedProject = ProjectArchive::load(path, &error);
   if (!loadedProject.has_value()) {
     QMessageBox::critical(this, tr("Open Project"), tr("The project could not be opened:\n%1").arg(error));
-    return;
+    return false;
   }
 
   QVector<CanvasView::LayerImage> canvasLayers;
@@ -286,6 +295,7 @@ void MainWindow::openProject()
   rememberDirectory(path);
   updateHistoryPanel();
   statusBar()->showMessage(tr("Opened project"), 3000);
+  return true;
 }
 
 void MainWindow::saveProject()
