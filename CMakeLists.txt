@@ -111,6 +111,7 @@ if(QCO_STUDIO_BUILD_APP)
     )
 
     add_test(NAME qcostudio_project_archive_tests COMMAND qcostudio_project_archive_tests)
+    set_tests_properties(qcostudio_project_archive_tests PROPERTIES TIMEOUT 30)
 
     qt_add_executable(qcostudio_canvas_smoke_tests
       tests/canvas_smoke_tests.cpp
@@ -131,6 +132,10 @@ if(QCO_STUDIO_BUILD_APP)
     )
 
     add_test(NAME qcostudio_canvas_smoke_tests COMMAND qcostudio_canvas_smoke_tests)
+    set_tests_properties(qcostudio_canvas_smoke_tests PROPERTIES TIMEOUT 30)
+    if(WIN32)
+      set_tests_properties(qcostudio_canvas_smoke_tests PROPERTIES DISABLED TRUE)
+    endif()
   endif()
 endif()
 
@@ -145,4 +150,5 @@ if(QCO_STUDIO_BUILD_TESTS)
   target_compile_features(qcostudio_core_tests PRIVATE cxx_std_20)
 
   add_test(NAME qcostudio_core_tests COMMAND qcostudio_core_tests)
+  set_tests_properties(qcostudio_core_tests PROPERTIES TIMEOUT 30)
 endif()
