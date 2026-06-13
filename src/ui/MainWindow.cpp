@@ -95,7 +95,7 @@ constexpr int defaultDocumentHeight = 1080;
 
 MainWindow::MainWindow(QWidget* parent)
   : QMainWindow(parent),
-    settings_(QStringLiteral("QCOStudio"), QStringLiteral("QCO Studio"))
+    settings_()
 {
   canvas_ = new CanvasView(this);
   setCentralWidget(canvas_);

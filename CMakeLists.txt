@@ -136,6 +136,33 @@ if(QCO_STUDIO_BUILD_APP)
     if(WIN32)
       set_tests_properties(qcostudio_canvas_smoke_tests PROPERTIES DISABLED TRUE)
     endif()
+
+    qt_add_executable(qcostudio_main_window_smoke_tests
+      tests/main_window_smoke_tests.cpp
+      src/app/Logging.cpp
+      src/app/Logging.h
+      src/ui/CanvasView.cpp
+      src/ui/CanvasView.h
+      src/ui/MainWindow.cpp
+      src/ui/MainWindow.h
+    )
+
+    target_include_directories(qcostudio_main_window_smoke_tests
+      PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    target_link_libraries(qcostudio_main_window_smoke_tests
+      PRIVATE
+        qcostudio_core
+        qcostudio_qt_support
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+    )
+
+    add_test(NAME qcostudio_main_window_smoke_tests COMMAND qcostudio_main_window_smoke_tests)
+    set_tests_properties(qcostudio_main_window_smoke_tests PROPERTIES TIMEOUT 30)
   endif()
 endif()
 

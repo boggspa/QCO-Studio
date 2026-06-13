@@ -13,7 +13,7 @@ This repository is currently Phase 1. The app skeleton includes:
 - Basic raster layer add, duplicate, rename, reorder, visibility, opacity, and canvas move controls.
 - Initial editing tools: configurable brush, eraser, flood fill, drag crop, crop-to-layer, raster-backed text layer, and raster-backed shape layer.
 - Core document/layer model and command undo stack.
-- Core, archive round-trip, and canvas smoke tests.
+- Core, archive round-trip, canvas smoke, and app shell smoke tests.
 
 ## Build
 
