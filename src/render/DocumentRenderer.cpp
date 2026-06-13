@@ -1,6 +1,8 @@
 #include "render/DocumentRenderer.h"
 
+#include <QPoint>
 #include <QPainter>
+#include <QRect>
 #include <QSize>
 
 #include <algorithm>
@@ -30,10 +32,19 @@ namespace {
 
 }  // namespace
 
-QImage QtDocumentRenderer::render(
+QImage DocumentRenderer::render(
   const qco::core::Document& document,
   const QVector<LayerImage>& layerImages,
   const QColor& background) const
+{
+  return render(document, layerImages, background, RenderSettings{});
+}
+
+QImage QtDocumentRenderer::render(
+  const qco::core::Document& document,
+  const QVector<LayerImage>& layerImages,
+  const QColor& background,
+  const RenderSettings& settings) const
 {
   const auto canvasSize = document.canvasSize();
   if (!canvasSize.isValid()) {
@@ -41,6 +52,33 @@ QImage QtDocumentRenderer::render(
   }
 
   QImage output(toQtSize(canvasSize), QImage::Format_ARGB32_Premultiplied);
+  output.fill(Qt::transparent);
+
+  QPainter painter(&output);
+  for (const auto& tileRect : tileRectsForCanvas(output.size(), settings.tileSize)) {
+    painter.drawImage(tileRect.topLeft(), renderTile(document, layerImages, tileRect, background));
+  }
+  painter.end();
+  return output;
+}
+
+QImage QtDocumentRenderer::renderTile(
+  const qco::core::Document& document,
+  const QVector<LayerImage>& layerImages,
+  QRect tileRect,
+  const QColor& background) const
+{
+  const auto canvasSize = document.canvasSize();
+  if (!canvasSize.isValid()) {
+    return {};
+  }
+
+  tileRect = tileRect.intersected(QRect(QPoint(0, 0), toQtSize(canvasSize)));
+  if (tileRect.isEmpty()) {
+    return {};
+  }
+
+  QImage output(tileRect.size(), QImage::Format_ARGB32_Premultiplied);
   output.fill(background);
 
   QPainter painter(&output);
@@ -56,8 +94,13 @@ QImage QtDocumentRenderer::render(
       continue;
     }
 
+    const QRect layerRect(toQtPoint(layer.position), layerImage->image.size());
+    if (!layerRect.intersects(tileRect)) {
+      continue;
+    }
+
     painter.setOpacity(std::clamp(layer.opacity, 0.0, 1.0));
-    painter.drawImage(toQtPoint(layer.position), layerImage->image);
+    painter.drawImage(toQtPoint(layer.position) - tileRect.topLeft(), layerImage->image);
   }
 
   painter.end();
